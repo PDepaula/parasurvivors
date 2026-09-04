@@ -76,7 +76,7 @@ tests/test_rules.nim
 **Interfaces:**
 - Produces: `core.Game` (`object of RootGame` with `deltaTime`, `totalTime`), `core.init(game: var Game)`, `core.tick(game: var Game)`, `core.onKeyPress/onKeyRelease(key: int)`, `core.onWindowResize(windowWidth, windowHeight, worldWidth, worldHeight: int)`.
 
-- [ ] **Step 1: Write the nimble file**
+- [x] **Step 1: Write the nimble file**
 
 `parasurvivors.nimble`:
 ```nim
@@ -108,7 +108,7 @@ task assets, "Download and compose art assets":
   exec "bash tools/fetch_assets.sh"
 ```
 
-- [ ] **Step 2: Write config.nims and .gitignore**
+- [x] **Step 2: Write config.nims and .gitignore**
 
 `config.nims`:
 ```nim
@@ -139,7 +139,7 @@ output.wav
 *.exe
 ```
 
-- [ ] **Step 3: Write the GLFW entry point (adapted from `/home/pdp/Projects/paratry/src/paratry.nim`)**
+- [x] **Step 3: Write the GLFW entry point (adapted from `/home/pdp/Projects/paratry/src/paratry.nim`)**
 
 `src/parasurvivors.nim`:
 ```nim
@@ -207,7 +207,7 @@ when isMainModule:
   glfwTerminate()
 ```
 
-- [ ] **Step 4: Write a stub core that clears the screen**
+- [x] **Step 4: Write a stub core that clears the screen**
 
 `src/core.nim` (temporary; replaced in Task 9/10):
 ```nim
@@ -243,7 +243,7 @@ proc tick*(game: var Game) =
   glViewport(0, 0, int32(windowW), int32(windowH))
 ```
 
-- [ ] **Step 5: Write a placeholder test so `nimble test` has something to run**
+- [x] **Step 5: Write a placeholder test so `nimble test` has something to run**
 
 `tests/test_data.nim`:
 ```nim
@@ -254,7 +254,7 @@ suite "data":
     check true
 ```
 
-- [ ] **Step 6: Install deps and build**
+- [x] **Step 6: Install deps and build**
 
 Run: `cd /home/pdp/Projects/parasurvivors && nimble install -d -y && nimble build`
 Expected: dependencies resolve (paratext, parasound, paramidi, paramidi_soundfonts are fetched from GitHub) and `parasurvivors` binary appears. If `paramidi_soundfonts` install is slow, that is normal (it ships a .sf2).
@@ -265,7 +265,7 @@ Expected: a dark green window for 5 seconds, exit=124 (killed by timeout). No cr
 Run: `nimble test`
 Expected: `[OK] placeholder`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -283,7 +283,7 @@ git commit -m "feat: project skeleton with GLFW window and test task"
 **Interfaces:**
 - Produces: every enum, `Stats`, `characterDefs`, `weaponDefs`, `weaponUpgrades`, `weaponAt(kind, level): WeaponDef`, `passiveDefs`, `computeStats(hero, passives): Stats`, `maxHpFor(hero, passives): float`, `enemyDefs`, `hpScale(minute)`, `waves`, `waveFor(minute): Wave`, `bosses`, `xpForLevel(level): int`, `gemValue(kind): int`, `clockText(secs): string`, key code constants, tuning constants.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Replace `tests/test_data.nim`:
 ```nim
@@ -342,12 +342,12 @@ suite "data":
     check clockText(1800) == "30:00"
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `nimble test`
 Expected: compile error `cannot open file: data`.
 
-- [ ] **Step 3: Write data.nim**
+- [x] **Step 3: Write data.nim**
 
 `src/data.nim`:
 ```nim
@@ -653,12 +653,12 @@ proc clockText*(secs: float): string =
   align($(total div 60), 2, '0') & ":" & align($(total mod 60), 2, '0')
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `nimble test`
 Expected: all 7 `data` tests `[OK]`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/data.nim tests/test_data.nim
@@ -677,7 +677,7 @@ git commit -m "feat: data tables for characters, weapons, passives, enemies, wav
 - Produces: `Hit`, `ProjSpec`, `ChoiceKind`, `Choice`, `PickupResult`, `dist`, `enemyRadius`, `collide[P, E](projs, enemies): seq[Hit]`, `contactDamage[E](enemies, px, py, armor, dt): float`, `scanPickups[P](pickups, px, py, magnet): PickupResult`, `nearestEnemy[E](enemies, px, py)`, `offscreenPoint(px, py, ww, wh)`, `tooFar(ex, ey, px, py, ww, wh)`, `facingVec(Dir)`, `attackPlan(...)`, `generateChoices(...)`, `separate[E](enemies): seq[(int, float, float)]`.
 - Generic procs duck-type on fields: enemies need `id, kind, x, y, hp, damage, size`; projectiles need `id, kind, x, y, size, damage, pierce, hitIds, ttl`; pickups need `id, kind, x, y, magnetized`.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 `tests/test_systems.nim`:
 ```nim
@@ -790,12 +790,12 @@ suite "systems":
       if id == 11: check dx > 0
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `nimble test`
 Expected: compile error `cannot open file: systems`.
 
-- [ ] **Step 3: Write systems.nim**
+- [x] **Step 3: Write systems.nim**
 
 `src/systems.nim`:
 ```nim
@@ -1035,12 +1035,12 @@ proc separate*[E](enemies: openArray[E]): seq[(int, float, float)] =
   result.sort(proc (a, b: (int, float, float)): int = cmp(a[0], b[0]))
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `nimble test`
 Expected: all `systems` tests `[OK]`. If `separate` order differs, the test only checks signs so it still passes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/systems.nim tests/test_systems.nim
@@ -1058,7 +1058,7 @@ git commit -m "feat: pure systems for collision, pickups, attacks, choices"
 - Produces: `Id`, `Attr`, `PhaseKind`, `IntSet`, `Choices`, `Fact`, `FactMatch`, `rules`, `session` (global), `newSession()`, `resetSession()`, `allocId()`, `resetIds()`, `startRun(session, hero)`, getters listed below, rule names listed below.
 - Later tasks append rules inside the same `staticRuleset` block and more helper procs after it.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 `tests/test_rules.nim`:
 ```nim
@@ -1155,12 +1155,12 @@ suite "rules: session and player":
     check s.queryAll(rules.getWeapons).len == 0
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `nimble test`
 Expected: compile error `cannot open file: rules`.
 
-- [ ] **Step 3: Write rules.nim (first version)**
+- [x] **Step 3: Write rules.nim (first version)**
 
 `src/rules.nim`:
 ```nim
@@ -1503,7 +1503,7 @@ proc startRun*(session: var Session[Fact, FactMatch], hero: CharacterKind) =
   session.insert(Global, Phase, Running)
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `nimble test`
 Expected: all `rules: session and player` tests `[OK]`.
@@ -1514,7 +1514,7 @@ template rules*: untyped = rules
 ```
 is also invalid. The working fallback is: keep `let (initSession, rulesInternal) = staticRuleset(...)` and then `let rules* = rulesInternal`. Prefer trying `rules*` in the tuple first — Nim 2 accepts `let (a, b*) = ...`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/rules.nim tests/test_rules.nim
@@ -1532,7 +1532,7 @@ git commit -m "feat: pararules schema, getters, player movement and clock"
 **Interfaces:**
 - Produces: `insertProjectile(session, spec: ProjSpec): int`, `retractProjectile(session, id)`, rules `tickWeapons`, `moveProjectiles`.
 
-- [ ] **Step 1: Add failing tests**
+- [x] **Step 1: Add failing tests**
 
 Append to `tests/test_rules.nim`:
 ```nim
@@ -1595,12 +1595,12 @@ suite "rules: weapons and projectiles":
 ```
 Add `import sequtils` at the top of the test file.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `nimble test`
 Expected: compile error `undeclared identifier: 'insertProjectile'`.
 
-- [ ] **Step 3: Add the rules**
+- [x] **Step 3: Add the rules**
 
 Insert after `regenPlayer` inside the `staticRuleset` block:
 ```nim
@@ -1723,12 +1723,12 @@ proc retractProjectile*(session: var Session[Fact, FactMatch], id: int) =
 ```
 Then replace the 11 `session.insert(pid, ...)` lines inside `tickWeapons` with `discard session.insertProjectile(spec)` — the helper is declared after the ruleset, so if Nim reports it undeclared inside the rule body, move `insertProjectile`/`retractProjectile` *above* the `let (initSession, rules*) = ...` line (they only need the generated `Session[Fact, FactMatch]` type and `insert`, which the `schema` macro already produced). Keep whichever compiles; the inline version above is the guaranteed one.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `nimble test`
 Expected: all tests `[OK]`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/rules.nim tests/test_rules.nim
@@ -1745,7 +1745,7 @@ git commit -m "feat: weapon cooldowns and projectile motion rules"
 **Interfaces:**
 - Produces: `spawnEnemy(session, kind, x, y, minute): int`, `retractEnemy(session, id)`, `spawnPickup(session, kind, x, y, value): int`, `retractPickup(session, id)`, rules `moveEnemies`, `decayHitFlash`, `spawnWave`, `spawnBosses`, `movePickups`.
 
-- [ ] **Step 1: Add failing tests**
+- [x] **Step 1: Add failing tests**
 
 Append to `tests/test_rules.nim`:
 ```nim
@@ -1821,12 +1821,12 @@ suite "rules: enemies, waves, pickups":
     check not s.contains(p, X)
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `nimble test`
 Expected: compile error `undeclared identifier: 'spawnEnemy'`.
 
-- [ ] **Step 3: Add helpers above the ruleset and rules inside it**
+- [x] **Step 3: Add helpers above the ruleset and rules inside it**
 
 Insert these procs **above** `let (initSession, rules*) = ...` (they are called from rule bodies):
 ```nim
@@ -1963,12 +1963,12 @@ Insert inside the ruleset after `moveProjectiles`:
         session.insert(id, Y, y + ddy * v)
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `nimble test`
 Expected: all tests `[OK]`. The "waves keep the minimum count" test needs three ticks because a tick spawns at most 10.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/rules.nim tests/test_rules.nim
@@ -1985,7 +1985,7 @@ git commit -m "feat: enemy movement, wave and boss spawning, magnetized pickups"
 **Interfaces:**
 - Produces: `StepEvents`, `stepSystems(session, dt): StepEvents`, `prepareChoices(session)`, `applyChoice(session, choice)`, rules `levelUp`, `playerDied`.
 
-- [ ] **Step 1: Add failing tests**
+- [x] **Step 1: Add failing tests**
 
 Append to `tests/test_rules.nim`:
 ```nim
@@ -2092,12 +2092,12 @@ suite "rules: systems step, level up, death":
     check s.queryAll(rules.getEnemies).allIt(it.x < 5000.0)
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `nimble test`
 Expected: compile error `undeclared identifier: 'stepSystems'`.
 
-- [ ] **Step 3: Add the reactive rules**
+- [x] **Step 3: Add the reactive rules**
 
 Inside the ruleset after `movePickups`:
 ```nim
@@ -2130,7 +2130,7 @@ Inside the ruleset after `movePickups`:
           if t >= float(runLengthSecs): "You survived until dawn!" else: "Slain at " & clockText(t))
 ```
 
-- [ ] **Step 4: Add stepSystems, prepareChoices, applyChoice at the end of rules.nim**
+- [x] **Step 4: Add stepSystems, prepareChoices, applyChoice at the end of rules.nim**
 
 ```nim
 # ---------------------------------------------------------------- per-tick systems
@@ -2296,14 +2296,14 @@ proc applyChoice*(session: var Session[Fact, FactMatch], c: Choice) =
   session.recomputeStats()
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `nimble test`
 Expected: all tests `[OK]`.
 
 If `fireRules` raises the recursion-limit error in "gems give xp", the `levelUp` rule re-fired too often: confirm `Xp` is the only tuple without `then = false`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/rules.nim tests/test_rules.nim
@@ -2318,7 +2318,7 @@ git commit -m "feat: per-tick systems step, level-up flow, player death"
 - Create: `tools/fetch_assets.sh`, `src/assets/CREDITS.md`
 - Generated (committed): `src/assets/{otto,imma,lina,gino,skeleton,zombie,mudman,ghost,reaper,bat,koalio,parakeet,grass}.png`, `src/assets/Roboto-Regular.ttf`, `src/assets/CREDITS-lpc.csv`, `src/assets/CREDITS-lpc-base.txt`
 
-- [ ] **Step 1: Write the script**
+- [x] **Step 1: Write the script**
 
 `tools/fetch_assets.sh`:
 ```bash
@@ -2394,14 +2394,14 @@ echo "done. sizes:"
 file "$OUT"/*.png | sed 's/PNG image data, //' | cut -d, -f1-2
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `chmod +x tools/fetch_assets.sh && nimble assets`
 Expected output ends with sizes: character/enemy sheets `576 x 256`, `bat.png: 96 x 128`, `grass.png: 96 x 192`, `koalio.png: 128 x 32`, `parakeet.png: 210 x 100`. Any `WARNING: no credits row` means the CSV path format changed — open `$TMP/CREDITS.csv` (re-download it) and adjust the grep pattern; the row must end up in `CREDITS-lpc.csv`.
 
 Visually check `src/assets/otto.png` (open it with `magick display` or the Read tool): 4 rows of a walking man, transparent background.
 
-- [ ] **Step 3: Write CREDITS.md**
+- [x] **Step 3: Write CREDITS.md**
 
 `src/assets/CREDITS.md`:
 ```markdown
@@ -2435,7 +2435,7 @@ Visually check `src/assets/otto.png` (open it with `magick display` or the Read 
 - Google, Apache License 2.0.
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tools/fetch_assets.sh src/assets
@@ -2454,7 +2454,7 @@ git commit -m "feat: asset pipeline for LPC sprites, tiles, font and credits"
 - Produces: `render.initRender[G](game: var G)`, `render.drawFrame[G](game: G)`.
 - `core.tick` becomes: insert time → fireRules → stepSystems → fireRules → drawFrame (menus come in Task 10; for now the game auto-starts a run with Otto so this task is visually verifiable).
 
-- [ ] **Step 1: Write render.nim**
+- [x] **Step 1: Write render.nim**
 
 `src/render.nim`:
 ```nim
@@ -2854,7 +2854,7 @@ Notes for the implementer:
 - If `sheets.mpairs` complains, iterate `for name in toSeq(sheets.keys)` and index `sheets[name]`.
 - The bat sheet rows may not be ordered up/left/down/right; only row 0 is used.
 
-- [ ] **Step 2: Replace core.nim so a run starts immediately (menus in Task 10)**
+- [x] **Step 2: Replace core.nim so a run starts immediately (menus in Task 10)**
 
 `src/core.nim`:
 ```nim
@@ -2912,14 +2912,14 @@ proc tick*(game: var Game) =
   drawFrame(game)
 ```
 
-- [ ] **Step 3: Build and look**
+- [x] **Step 3: Build and look**
 
 Run: `nimble build && ./parasurvivors`
 Expected: grass field, Otto in the middle walking with WASD/arrows with a 4-direction LPC walk cycle, bats flying in from the edges, whip flashes killing them, blue gems appearing and flying to the player, XP bar filling, clock ticking. After the first level the screen darkens with "LEVEL UP!" and three options (input for it comes in Task 10; kill the window with Escape from the terminal `Ctrl-C`).
 
 Check the terminal for a pararules recursion error or a `query` failure; both mean a rule mutates without `then = false` or a fact is missing from `newSession`/`startRun`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/render.nim src/core.nim
@@ -2933,7 +2933,7 @@ git commit -m "feat: render ground, sprites, projectiles, pickups and HUD"
 **Files:**
 - Modify: `src/core.nim`
 
-- [ ] **Step 1: Replace `init` and `tick` with the phase machine**
+- [x] **Step 1: Replace `init` and `tick` with the phase machine**
 
 ```nim
 proc init*(game: var Game) =
@@ -3012,17 +3012,17 @@ proc tick*(game: var Game) =
 
 `moveSelection` with count 3 must not exceed the number of choices when the fallback offers only 2: `finishChoice` already guards `index >= len`, and the marker just won't match a row. Acceptable.
 
-- [ ] **Step 2: Build and play**
+- [x] **Step 2: Build and play**
 
 Run: `nimble build && ./parasurvivors`
 Expected flow: title → Enter → character list with sprites, Up/Down moves the marker → Enter starts → level up shows 3 options selectable by 1/2/3 or Up/Down+Enter → Escape pauses/resumes → dying shows the result and R returns to character select with a clean world.
 
-- [ ] **Step 3: Quick 30-minute sanity run**
+- [x] **Step 3: Quick 30-minute sanity run**
 
 Run: `nim c -d:fastclock -d:release --outdir:tmp src/parasurvivors.nim && ./tmp/parasurvivors`
 Expected: the clock runs 10×; bosses appear at 3, 8, 12, 15, 20, 25 min (Giant Parakeet, Koalio); the Reaper at 30:00 and death → "You survived until dawn!". Watch the terminal for any exception.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/core.nim
@@ -3040,7 +3040,7 @@ git commit -m "feat: title, character select, level-up, pause and game-over flow
 **Interfaces:**
 - Produces: `Sfx` enum, `initAudio()`, `play(Sfx)`, `startMusic()`, `stopMusic()`.
 
-- [ ] **Step 1: Write audio.nim**
+- [x] **Step 1: Write audio.nim**
 
 ```nim
 ## All sound is synthesised at startup: paramidi scores → PCM → WAV bytes → miniaudio sounds.
@@ -3159,7 +3159,7 @@ else:
 If `(mode: concurrent)` nesting fails to compile, drop the bass line and pass only the piano tuple.
 If `+c` inside the tuple is rejected, replace with `c5` style absolute octave notes (README shows both forms).
 
-- [ ] **Step 2: Hook into core**
+- [x] **Step 2: Hook into core**
 
 In `src/core.nim`: add `import audio`; in `init` call `initAudio()` after `initRender(game)`; in `tick`:
 - `CharSelect` Enter → after `startRun` call `startMusic()`.
@@ -3174,7 +3174,7 @@ In `src/core.nim`: add `import audio`; in `init` call `initAudio()` after `initR
   and when `m.pending > 0` also `play(SfxLevelUp)`.
 - `GameOver` entry: detect the transition by checking `phase == GameOver` and a module-level `var musicOn = false` toggled by `startMusic`/`stopMusic`; call `stopMusic()` once.
 
-- [ ] **Step 3: Build and listen**
+- [x] **Step 3: Build and listen**
 
 Run: `nimble build && ./parasurvivors`
 Expected: startup takes a second longer (rendering the scores), music loops from the start of a run, hits click, gems chime, level-up arpeggio, low thump when hurt.
@@ -3185,7 +3185,7 @@ Expected: compiles and runs silently.
 Run: `nimble test`
 Expected: still all `[OK]` (tests define `noaudio`).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/audio.nim src/core.nim
@@ -3199,7 +3199,7 @@ git commit -m "feat: paramidi-generated sound effects and music via parasound"
 **Files:**
 - Modify: `src/rules.nim` (stepSystems), `README.md`
 
-- [ ] **Step 1: Apply enemy separation in stepSystems**
+- [x] **Step 1: Apply enemy separation in stepSystems**
 
 After step 2 ("damage, deaths, drops, despawn") add:
 ```nim
@@ -3212,7 +3212,7 @@ After step 2 ("damage, deaths, drops, despawn") add:
 ```
 Run `nimble test` — still green.
 
-- [ ] **Step 2: Measure frame time with 300 enemies**
+- [x] **Step 2: Measure frame time with 300 enemies**
 
 Add to `core.tick` temporarily (or behind `when defined(perf)`):
 ```nim
@@ -3224,7 +3224,7 @@ Add to `core.tick` temporarily (or behind `when defined(perf)`):
 Run: `nim c -d:release -d:fastclock -d:perf --outdir:tmp src/parasurvivors.nim && ./tmp/parasurvivors`
 Expected: at 25+ minutes with ~200–300 enemies, `dt` stays under 16 ms. If it doesn't: (a) confirm `-d:release`; (b) reduce `maxEnemies` to 200; (c) as a last resort skip `separate` when `enemies.len > 150`.
 
-- [ ] **Step 3: README**
+- [x] **Step 3: README**
 
 Append to `README.md`:
 ```markdown
@@ -3253,7 +3253,7 @@ Flags: `-d:noaudio` (silent), `-d:fastclock` (10× game clock for testing waves)
 Art: Liberated Pixel Cup contributors, see `src/assets/CREDITS.md`.
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/rules.nim src/core.nim README.md
