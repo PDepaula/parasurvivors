@@ -146,3 +146,74 @@ suite "rules: weapons and projectiles":
     check s.queryAll(gameRules.getProjectiles).len == 1
     s.retractProjectile(id)
     check s.queryAll(gameRules.getProjectiles).len == 0
+
+suite "rules: enemies, waves, pickups":
+  test "enemies walk toward the player":
+    var s = newSession()
+    s.startRun(Otto)
+    let id = s.spawnEnemy(Zombie, 100.0, 0.0, 0)
+    s.step(0.5)
+    let e = s.query(gameRules.getEnemies, id = id)
+    check e.x < 100.0
+    check abs(e.x - (100.0 - enemyDefs[Zombie].speed * 0.5)) < 1e-6
+    check e.hp == enemyDefs[Zombie].hp
+
+  test "enemy hp scales with the minute":
+    var s = newSession()
+    s.startRun(Otto)
+    let id = s.spawnEnemy(Zombie, 100.0, 0.0, 10)
+    check abs(s.query(gameRules.getEnemies, id = id).hp - enemyDefs[Zombie].hp * hpScale(10)) < 1e-9
+    let boss = s.spawnEnemy(Koalio, 100.0, 0.0, 10)
+    check s.query(gameRules.getEnemies, id = boss).hp == enemyDefs[Koalio].hp
+
+  test "hit flash decays":
+    var s = newSession()
+    s.startRun(Otto)
+    let id = s.spawnEnemy(Bat, 100.0, 0.0, 0)
+    s.insert(id, HitFlash, 0.1)
+    s.step(0.05)
+    check abs(s.query(gameRules.getEnemies, id = id).hitFlash - 0.05) < 1e-9
+    s.step(0.5)
+    check s.query(gameRules.getEnemies, id = id).hitFlash == 0.0
+
+  test "waves keep the minimum count and spawn offscreen":
+    var s = newSession()
+    s.startRun(Otto)
+    for i in 0 ..< 3:
+      s.step(0.016)
+    let es = s.queryAll(gameRules.getEnemies)
+    check es.len >= waveFor(0).minCount
+    for e in es:
+      check e.kind == Bat
+      check abs(e.x) >= 1024.0 / 2 or abs(e.y) >= 768.0 / 2
+
+  test "bosses spawn once at their minute":
+    var s = newSession()
+    s.startRun(Otto)
+    s.insert(Global, GameTime, 3 * 60.0 - 0.1)
+    s.step(0.2 / clockScale)
+    check s.queryAll(gameRules.getEnemies).filterIt(it.kind == Parakeet).len == 1
+    s.step(0.2 / clockScale)
+    check s.queryAll(gameRules.getEnemies).filterIt(it.kind == Parakeet).len == 1
+
+  test "magnetized gems fly to the player":
+    var s = newSession()
+    s.startRun(Otto)
+    let id = s.spawnPickup(GemBlue, 200.0, 0.0, 1)
+    s.step(0.1)
+    check s.query(gameRules.getPickups, id = id).x == 200.0
+    s.insert(id, Magnetized, true)
+    s.step(0.1)
+    check s.query(gameRules.getPickups, id = id).x < 200.0
+
+  test "retract helpers remove every attribute":
+    var s = newSession()
+    s.startRun(Otto)
+    let e = s.spawnEnemy(Bat, 0, 0, 0)
+    let p = s.spawnPickup(Coin, 0, 0, 10)
+    s.retractEnemy(e)
+    s.retractPickup(p)
+    check s.queryAll(gameRules.getEnemies).len == 0
+    check s.queryAll(gameRules.getPickups).len == 0
+    check not s.contains(e, X)
+    check not s.contains(p, X)

@@ -111,6 +111,34 @@ proc faceOf(dx, dy: float, current: Dir): Dir =
 
 # ---------------------------------------------------------------- rules
 
+proc spawnEnemy*[S](session: var S, kind: EnemyKind, x, y: float, minute: int): int =
+  let d = enemyDefs[kind]
+  result = allocId()
+  session.insert(result, Enemy, kind)
+  session.insert(result, X, x)
+  session.insert(result, Y, y)
+  session.insert(result, Hp, if d.boss: d.hp else: d.hp * hpScale(minute))
+  session.insert(result, Speed, d.speed)
+  session.insert(result, Damage, d.damage)
+  session.insert(result, Size, d.size)
+  session.insert(result, HitFlash, 0.0)
+
+proc retractEnemy*[S](session: var S, id: int) =
+  for a in [Enemy, X, Y, Hp, Speed, Damage, Size, HitFlash]:
+    session.retract(id, a)
+
+proc spawnPickup*[S](session: var S, kind: PickupKind, x, y: float, value: int): int =
+  result = allocId()
+  session.insert(result, Pickup, kind)
+  session.insert(result, X, x)
+  session.insert(result, Y, y)
+  session.insert(result, Value, value)
+  session.insert(result, Magnetized, false)
+
+proc retractPickup*[S](session: var S, id: int) =
+  for a in [Pickup, X, Y, Value, Magnetized]:
+    session.retract(id, a)
+
 let (initSession, rulesInternal) =
   staticRuleset(Fact, FactMatch):
     # ---- getters
@@ -344,6 +372,106 @@ let (initSession, rulesInternal) =
         of MagicWand, Knife:
           session.insert(id, X, x + vx * dt)
           session.insert(id, Y, y + vy * dt)
+
+    rule moveEnemies(Fact):
+      what:
+        (Global, DeltaTime, dt)
+        (Player, X, px, then = false)
+        (Player, Y, py, then = false)
+        (id, Enemy, kind, then = false)
+        (id, X, x, then = false)
+        (id, Y, y, then = false)
+        (id, Speed, speed, then = false)
+      then:
+        let ddx = px - x
+        let ddy = py - y
+        let d = sqrt(ddx * ddx + ddy * ddy)
+        if d > 1.0:
+          let v = speed * dt / d
+          session.insert(id, X, x + ddx * v)
+          session.insert(id, Y, y + ddy * v)
+
+    rule decayHitFlash(Fact):
+      what:
+        (Global, DeltaTime, dt)
+        (id, HitFlash, f, then = false)
+      cond:
+        f > 0
+      then:
+        session.insert(id, HitFlash, max(0.0, f - dt))
+
+    rule spawnWave(Fact):
+      what:
+        (Global, DeltaTime, dt)
+        (Global, GameTime, t, then = false)
+        (Global, SpawnTimer, timer, then = false)
+        (Global, EnemyCount, count, then = false)
+        (Global, WorldWidth, ww, then = false)
+        (Global, WorldHeight, wh, then = false)
+        (Player, X, px, then = false)
+        (Player, Y, py, then = false)
+      then:
+        let minute = int(t / 60)
+        let wave = waveFor(minute)
+        var timer2 = timer + dt
+        var toSpawn = 0
+        if count < wave.minCount:
+          toSpawn = min(wave.minCount - count, 10)
+        elif timer2 >= wave.interval:
+          toSpawn = 1
+        if toSpawn > 0:
+          timer2 = 0
+        var spawned = 0
+        for i in 0 ..< toSpawn:
+          if count + spawned >= maxEnemies:
+            break
+          let kind = wave.kinds[rand(wave.kinds.high)]
+          let (sx, sy) = offscreenPoint(px, py, ww, wh)
+          discard session.spawnEnemy(kind, sx, sy, minute)
+          inc spawned
+        session.insert(Global, SpawnTimer, timer2)
+        session.insert(Global, EnemyCount, count + spawned)
+
+    rule spawnBosses(Fact):
+      what:
+        (Global, GameTime, t)
+        (Global, BossesSpawned, done, then = false)
+        (Global, WorldWidth, ww, then = false)
+        (Global, WorldHeight, wh, then = false)
+        (Player, X, px, then = false)
+        (Player, Y, py, then = false)
+      then:
+        var done2 = done
+        var changed = false
+        for b in bosses:
+          let key = b.minute * 100 + b.kind.ord
+          if t >= float(b.minute * 60) and not done2.contains(key):
+            for i in 0 ..< b.count:
+              let (sx, sy) = offscreenPoint(px, py, ww, wh)
+              discard session.spawnEnemy(b.kind, sx, sy, b.minute)
+            done2.incl(key)
+            changed = true
+        if changed:
+          session.insert(Global, BossesSpawned, done2)
+
+    rule movePickups(Fact):
+      what:
+        (Global, DeltaTime, dt)
+        (Player, X, px, then = false)
+        (Player, Y, py, then = false)
+        (id, Pickup, kind, then = false)
+        (id, Magnetized, magnetized, then = false)
+        (id, X, x, then = false)
+        (id, Y, y, then = false)
+      cond:
+        magnetized
+      then:
+        let ddx = px - x
+        let ddy = py - y
+        let d = max(1e-6, sqrt(ddx * ddx + ddy * ddy))
+        let v = min(d, gemFlySpeed * dt) / d
+        session.insert(id, X, x + ddx * v)
+        session.insert(id, Y, y + ddy * v)
 
 let gameRules* = rulesInternal
 
