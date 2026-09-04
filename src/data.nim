@@ -15,6 +15,7 @@ type
     GemBlue, GemGreen, GemRed, Chicken, Coin, Chest, Vacuum
   Dir* = enum
     Up, Left, Down, Right ## LPC sheet row order
+  Vec2* = tuple[x, y: float] ## one position fact per entity (see rules.nim)
 
   Stats* = object
     might*, armor*, regen*, cooldownMul*, speedMul*, magnet*, area*, projSpeed*, duration*: float

@@ -1,0 +1,14 @@
+--- pararules/engine.nim (1.4.0)	2026-09-04 16:46:56.839859087 -0500
++++ pararules/engine.nim (patched)	2026-09-04 16:48:33.991407257 -0500
+@@ -404,9 +404,8 @@
+         nodeToMatches[node] = node.matches
+     # execute `then` blocks
+     for (node, idAttrs) in thenQueue:
+-      let matches = nodeToMatches[node]
+-      if matches.hasKey(idAttrs):
+-        let match = matches[idAttrs]
++      if nodeToMatches[node].hasKey(idAttrs):
++        let match = nodeToMatches[node][idAttrs]
+         if match.enabled:
+           when not defined(release):
+             session.triggeredNodeIds[].clear

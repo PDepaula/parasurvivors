@@ -1,5 +1,11 @@
 ## All game state lives in one pararules session. This module owns the schema,
 ## the rules, and the helper procs that create/destroy entities. No OpenGL here.
+##
+## Performance note: pararules re-scans every partial match of a join's parent
+## when a fact arrives at a non-root join. Each entity therefore keeps ONE
+## position fact (`Pos`) and every per-entity rule lists `(id, Pos, pos)` first,
+## so the hundreds of position updates per tick hit root joins (O(1) each).
+## `DeltaTime`, which is inserted once per tick, goes last.
 
 import pararules
 import sets, math, random, sequtils, tables
@@ -19,7 +25,7 @@ type
     # spawning / targeting
     SpawnTimer, EnemyCount, BossesSpawned, NearestX, NearestY, HasNearest,
     # shared entity attrs
-    Hero, X, Y, Facing, Moving, Hp, MaxHp, Speed, Damage, Size,
+    Hero, Pos, Facing, Moving, Hp, MaxHp, Speed, Damage, Size,
     Xp, Level, XpToNext, Gold, Kills, PlayerStats,
     # weapon slots
     Weapon, WeaponLevel, Cooldown,
@@ -58,8 +64,7 @@ schema Fact(Id, Attr):
   NearestY: float
   HasNearest: bool
   Hero: CharacterKind
-  X: float
-  Y: float
+  Pos: Vec2
   Facing: Dir
   Moving: bool
   Hp: float
@@ -109,14 +114,14 @@ proc faceOf(dx, dy: float, current: Dir): Dir =
   elif dy > 0: Down
   else: current
 
-# ---------------------------------------------------------------- rules
+# ---------------------------------------------------------------- entity helpers (used by rules)
+# Generic over the session type: FactMatch does not exist until staticRuleset runs.
 
 proc spawnEnemy*[S](session: var S, kind: EnemyKind, x, y: float, minute: int): int =
   let d = enemyDefs[kind]
   result = allocId()
+  session.insert(result, Pos, (x, y))
   session.insert(result, Enemy, kind)
-  session.insert(result, X, x)
-  session.insert(result, Y, y)
   session.insert(result, Hp, if d.boss: d.hp else: d.hp * hpScale(minute))
   session.insert(result, Speed, d.speed)
   session.insert(result, Damage, d.damage)
@@ -124,20 +129,38 @@ proc spawnEnemy*[S](session: var S, kind: EnemyKind, x, y: float, minute: int): 
   session.insert(result, HitFlash, 0.0)
 
 proc retractEnemy*[S](session: var S, id: int) =
-  for a in [Enemy, X, Y, Hp, Speed, Damage, Size, HitFlash]:
+  for a in [Enemy, Pos, Hp, Speed, Damage, Size, HitFlash]:
     session.retract(id, a)
 
 proc spawnPickup*[S](session: var S, kind: PickupKind, x, y: float, value: int): int =
   result = allocId()
+  session.insert(result, Pos, (x, y))
   session.insert(result, Pickup, kind)
-  session.insert(result, X, x)
-  session.insert(result, Y, y)
   session.insert(result, Value, value)
   session.insert(result, Magnetized, false)
 
 proc retractPickup*[S](session: var S, id: int) =
-  for a in [Pickup, X, Y, Value, Magnetized]:
+  for a in [Pickup, Pos, Value, Magnetized]:
     session.retract(id, a)
+
+proc insertProjectile*[S](session: var S, spec: ProjSpec): int =
+  result = allocId()
+  session.insert(result, Pos, (spec.x, spec.y))
+  session.insert(result, Proj, spec.kind)
+  session.insert(result, VX, spec.vx)
+  session.insert(result, VY, spec.vy)
+  session.insert(result, Ttl, spec.ttl)
+  session.insert(result, Pierce, spec.pierce)
+  session.insert(result, HitIds, initHashSet[int]())
+  session.insert(result, Angle, spec.angle)
+  session.insert(result, Size, spec.size)
+  session.insert(result, Damage, spec.damage)
+
+proc retractProjectile*[S](session: var S, id: int) =
+  for a in [Proj, Pos, VX, VY, Ttl, Pierce, HitIds, Angle, Size, Damage]:
+    session.retract(id, a)
+
+# ---------------------------------------------------------------- rules
 
 let (initSession, rulesInternal) =
   staticRuleset(Fact, FactMatch):
@@ -177,9 +200,8 @@ let (initSession, rulesInternal) =
         (Global, EnemyCount, enemyCount)
     rule getPlayer(Fact):
       what:
+        (Player, Pos, pos)
         (Player, Hero, hero)
-        (Player, X, x)
-        (Player, Y, y)
         (Player, Facing, facing)
         (Player, Moving, moving)
         (Player, Hp, hp)
@@ -203,9 +225,8 @@ let (initSession, rulesInternal) =
         (id, PassiveLevel, level)
     rule getEnemies(Fact):
       what:
+        (id, Pos, pos)
         (id, Enemy, kind)
-        (id, X, x)
-        (id, Y, y)
         (id, Hp, hp)
         (id, Speed, speed)
         (id, Damage, damage)
@@ -213,9 +234,8 @@ let (initSession, rulesInternal) =
         (id, HitFlash, hitFlash)
     rule getProjectiles(Fact):
       what:
+        (id, Pos, pos)
         (id, Proj, kind)
-        (id, X, x)
-        (id, Y, y)
         (id, VX, vx)
         (id, VY, vy)
         (id, Ttl, ttl)
@@ -226,29 +246,27 @@ let (initSession, rulesInternal) =
         (id, Damage, damage)
     rule getPickups(Fact):
       what:
+        (id, Pos, pos)
         (id, Pickup, kind)
-        (id, X, x)
-        (id, Y, y)
         (id, Value, value)
         (id, Magnetized, magnetized)
 
-    # ---- per-tick rules (trigger: DeltaTime)
+    # ---- per-tick rules (trigger: DeltaTime, always the last condition)
     rule tickGameTime(Fact):
       what:
-        (Global, DeltaTime, dt)
         (Global, GameTime, t, then = false)
+        (Global, DeltaTime, dt)
       then:
         session.insert(Global, GameTime, t + dt * clockScale)
 
     rule movePlayer(Fact):
       what:
-        (Global, DeltaTime, dt)
-        (Global, PressedKeys, keys, then = false)
-        (Player, X, x, then = false)
-        (Player, Y, y, then = false)
+        (Player, Pos, pos, then = false)
         (Player, Speed, speed, then = false)
         (Player, PlayerStats, st, then = false)
         (Player, Facing, facing, then = false)
+        (Global, PressedKeys, keys, then = false)
+        (Global, DeltaTime, dt)
       then:
         var dx = 0.0
         var dy = 0.0
@@ -260,17 +278,16 @@ let (initSession, rulesInternal) =
         if moving:
           let len = sqrt(dx * dx + dy * dy)
           let v = speed * st.speedMul * dt / len
-          session.insert(Player, X, x + dx * v)
-          session.insert(Player, Y, y + dy * v)
+          session.insert(Player, Pos, (pos.x + dx * v, pos.y + dy * v))
           session.insert(Player, Facing, faceOf(dx, dy, facing))
         session.insert(Player, Moving, moving)
 
     rule regenPlayer(Fact):
       what:
-        (Global, DeltaTime, dt)
         (Player, Hp, hp, then = false)
         (Player, MaxHp, maxHp, then = false)
         (Player, PlayerStats, st, then = false)
+        (Global, DeltaTime, dt)
       cond:
         st.regen > 0
         hp < maxHp
@@ -279,80 +296,63 @@ let (initSession, rulesInternal) =
 
     rule tickWeapons(Fact):
       what:
-        (Global, DeltaTime, dt)
-        (Global, HasNearest, hasNearest, then = false)
-        (Global, NearestX, nx, then = false)
-        (Global, NearestY, ny, then = false)
-        (Player, X, px, then = false)
-        (Player, Y, py, then = false)
-        (Player, Facing, facing, then = false)
-        (Player, PlayerStats, st, then = false)
         (id, Weapon, kind, then = false)
         (id, WeaponLevel, level, then = false)
         (id, Cooldown, cd, then = false)
+        (Global, HasNearest, hasNearest, then = false)
+        (Global, NearestX, nx, then = false)
+        (Global, NearestY, ny, then = false)
+        (Player, Pos, ppos, then = false)
+        (Player, Facing, facing, then = false)
+        (Player, PlayerStats, st, then = false)
+        (Global, DeltaTime, dt)
       then:
         let cd2 = cd - dt
         if cd2 > 0:
           session.insert(id, Cooldown, cd2)
         else:
-          for spec in attackPlan(kind, level, st, px, py, facing, hasNearest, nx, ny):
-            let pid = allocId()
-            session.insert(pid, Proj, spec.kind)
-            session.insert(pid, X, spec.x)
-            session.insert(pid, Y, spec.y)
-            session.insert(pid, VX, spec.vx)
-            session.insert(pid, VY, spec.vy)
-            session.insert(pid, Ttl, spec.ttl)
-            session.insert(pid, Pierce, spec.pierce)
-            session.insert(pid, HitIds, initHashSet[int]())
-            session.insert(pid, Angle, spec.angle)
-            session.insert(pid, Size, spec.size)
-            session.insert(pid, Damage, spec.damage)
+          for spec in attackPlan(kind, level, st, ppos.x, ppos.y, facing, hasNearest, nx, ny):
+            discard session.insertProjectile(spec)
           session.insert(id, Cooldown, weaponAt(kind, level).cooldown * st.cooldownMul)
 
     rule moveProjectiles(Fact):
       what:
-        (Global, DeltaTime, dt)
-        (Global, WorldWidth, ww, then = false)
-        (Global, WorldHeight, wh, then = false)
-        (Player, X, px, then = false)
-        (Player, Y, py, then = false)
+        (id, Pos, pos, then = false)
         (id, Proj, kind, then = false)
-        (id, X, x, then = false)
-        (id, Y, y, then = false)
         (id, VX, vx, then = false)
         (id, VY, vy, then = false)
         (id, Ttl, ttl, then = false)
         (id, Angle, angle, then = false)
+        (Global, WorldWidth, ww, then = false)
+        (Global, WorldHeight, wh, then = false)
+        (Player, Pos, ppos, then = false)
+        (Global, DeltaTime, dt)
       then:
         session.insert(id, Ttl, ttl - dt)
         case kind
         of Whip:
           discard # stays where it was spawned
         of Garlic:
-          session.insert(id, X, px)
-          session.insert(id, Y, py)
+          session.insert(id, Pos, ppos)
         of KingBible:
           # vx = angular speed, vy = orbit radius (see systems.attackPlan)
           let a = angle + vx * dt
           session.insert(id, Angle, a)
-          session.insert(id, X, px + cos(a) * vy)
-          session.insert(id, Y, py + sin(a) * vy)
+          session.insert(id, Pos, (ppos.x + cos(a) * vy, ppos.y + sin(a) * vy))
         of Axe:
           let vy2 = vy + axeGravity * dt
           session.insert(id, VY, vy2)
-          session.insert(id, X, x + vx * dt)
-          session.insert(id, Y, y + vy2 * dt)
+          session.insert(id, Pos, (pos.x + vx * dt, pos.y + vy2 * dt))
           session.insert(id, Angle, angle + 10 * dt)
         of Runetracer:
-          var nx = x + vx * dt
-          var ny = y + vy * dt
+          var nx = pos.x + vx * dt
+          var ny = pos.y + vy * dt
           var nvx = vx
           var nvy = vy
-          let left = px - ww / 2
-          let right = px + ww / 2
-          let top = py - wh / 2
-          let bottom = py + wh / 2
+          let left = ppos.x - ww / 2
+          let right = ppos.x + ww / 2
+          let top = ppos.y - wh / 2
+          let bottom = ppos.y + wh / 2
           if nx < left:
             nx = left
             nvx = abs(vx)
@@ -365,36 +365,31 @@ let (initSession, rulesInternal) =
           elif ny > bottom:
             ny = bottom
             nvy = -abs(vy)
-          session.insert(id, X, nx)
-          session.insert(id, Y, ny)
+          session.insert(id, Pos, (nx, ny))
           session.insert(id, VX, nvx)
           session.insert(id, VY, nvy)
         of MagicWand, Knife:
-          session.insert(id, X, x + vx * dt)
-          session.insert(id, Y, y + vy * dt)
+          session.insert(id, Pos, (pos.x + vx * dt, pos.y + vy * dt))
 
     rule moveEnemies(Fact):
       what:
-        (Global, DeltaTime, dt)
-        (Player, X, px, then = false)
-        (Player, Y, py, then = false)
+        (id, Pos, pos, then = false)
         (id, Enemy, kind, then = false)
-        (id, X, x, then = false)
-        (id, Y, y, then = false)
         (id, Speed, speed, then = false)
+        (Player, Pos, ppos, then = false)
+        (Global, DeltaTime, dt)
       then:
-        let ddx = px - x
-        let ddy = py - y
+        let ddx = ppos.x - pos.x
+        let ddy = ppos.y - pos.y
         let d = sqrt(ddx * ddx + ddy * ddy)
         if d > 1.0:
           let v = speed * dt / d
-          session.insert(id, X, x + ddx * v)
-          session.insert(id, Y, y + ddy * v)
+          session.insert(id, Pos, (pos.x + ddx * v, pos.y + ddy * v))
 
     rule decayHitFlash(Fact):
       what:
-        (Global, DeltaTime, dt)
         (id, HitFlash, f, then = false)
+        (Global, DeltaTime, dt)
       cond:
         f > 0
       then:
@@ -402,14 +397,13 @@ let (initSession, rulesInternal) =
 
     rule spawnWave(Fact):
       what:
-        (Global, DeltaTime, dt)
         (Global, GameTime, t, then = false)
         (Global, SpawnTimer, timer, then = false)
         (Global, EnemyCount, count, then = false)
         (Global, WorldWidth, ww, then = false)
         (Global, WorldHeight, wh, then = false)
-        (Player, X, px, then = false)
-        (Player, Y, py, then = false)
+        (Player, Pos, ppos, then = false)
+        (Global, DeltaTime, dt)
       then:
         let minute = int(t / 60)
         let wave = waveFor(minute)
@@ -426,7 +420,7 @@ let (initSession, rulesInternal) =
           if count + spawned >= maxEnemies:
             break
           let kind = wave.kinds[rand(wave.kinds.high)]
-          let (sx, sy) = offscreenPoint(px, py, ww, wh)
+          let (sx, sy) = offscreenPoint(ppos.x, ppos.y, ww, wh)
           discard session.spawnEnemy(kind, sx, sy, minute)
           inc spawned
         session.insert(Global, SpawnTimer, timer2)
@@ -434,12 +428,11 @@ let (initSession, rulesInternal) =
 
     rule spawnBosses(Fact):
       what:
-        (Global, GameTime, t)
         (Global, BossesSpawned, done, then = false)
         (Global, WorldWidth, ww, then = false)
         (Global, WorldHeight, wh, then = false)
-        (Player, X, px, then = false)
-        (Player, Y, py, then = false)
+        (Player, Pos, ppos, then = false)
+        (Global, GameTime, t)
       then:
         var done2 = done
         var changed = false
@@ -447,7 +440,7 @@ let (initSession, rulesInternal) =
           let key = b.minute * 100 + b.kind.ord
           if t >= float(b.minute * 60) and not done2.contains(key):
             for i in 0 ..< b.count:
-              let (sx, sy) = offscreenPoint(px, py, ww, wh)
+              let (sx, sy) = offscreenPoint(ppos.x, ppos.y, ww, wh)
               discard session.spawnEnemy(b.kind, sx, sy, b.minute)
             done2.incl(key)
             changed = true
@@ -456,22 +449,19 @@ let (initSession, rulesInternal) =
 
     rule movePickups(Fact):
       what:
-        (Global, DeltaTime, dt)
-        (Player, X, px, then = false)
-        (Player, Y, py, then = false)
+        (id, Pos, pos, then = false)
         (id, Pickup, kind, then = false)
         (id, Magnetized, magnetized, then = false)
-        (id, X, x, then = false)
-        (id, Y, y, then = false)
+        (Player, Pos, ppos, then = false)
+        (Global, DeltaTime, dt)
       cond:
         magnetized
       then:
-        let ddx = px - x
-        let ddy = py - y
+        let ddx = ppos.x - pos.x
+        let ddy = ppos.y - pos.y
         let d = max(1e-6, sqrt(ddx * ddx + ddy * ddy))
         let v = min(d, gemFlySpeed * dt) / d
-        session.insert(id, X, x + ddx * v)
-        session.insert(id, Y, y + ddy * v)
+        session.insert(id, Pos, (pos.x + ddx * v, pos.y + ddy * v))
 
     # ---- reactive rules
     rule levelUp(Fact):
@@ -542,7 +532,7 @@ proc resetSession*(old: Session[Fact, FactMatch]): Session[Fact, FactMatch] =
 
 var session* = newSession()
 
-# ---------------------------------------------------------------- entity helpers
+# ---------------------------------------------------------------- player helpers
 
 proc addWeapon*(session: var Session[Fact, FactMatch], kind: WeaponKind, level = 1) =
   let id = allocId()
@@ -554,24 +544,6 @@ proc addPassive*(session: var Session[Fact, FactMatch], kind: PassiveKind, level
   let id = allocId()
   session.insert(id, Passive, kind)
   session.insert(id, PassiveLevel, level)
-
-proc insertProjectile*(session: var Session[Fact, FactMatch], spec: ProjSpec): int =
-  result = allocId()
-  session.insert(result, Proj, spec.kind)
-  session.insert(result, X, spec.x)
-  session.insert(result, Y, spec.y)
-  session.insert(result, VX, spec.vx)
-  session.insert(result, VY, spec.vy)
-  session.insert(result, Ttl, spec.ttl)
-  session.insert(result, Pierce, spec.pierce)
-  session.insert(result, HitIds, initHashSet[int]())
-  session.insert(result, Angle, spec.angle)
-  session.insert(result, Size, spec.size)
-  session.insert(result, Damage, spec.damage)
-
-proc retractProjectile*(session: var Session[Fact, FactMatch], id: int) =
-  for a in [Proj, X, Y, VX, VY, Ttl, Pierce, HitIds, Angle, Size, Damage]:
-    session.retract(id, a)
 
 proc recomputeStats*(session: var Session[Fact, FactMatch]) =
   let p = session.query(gameRules.getPlayer)
@@ -585,8 +557,7 @@ proc recomputeStats*(session: var Session[Fact, FactMatch]) =
 proc startRun*(session: var Session[Fact, FactMatch], hero: CharacterKind) =
   let c = characterDefs[hero]
   session.insert(Player, Hero, hero)
-  session.insert(Player, X, 0.0)
-  session.insert(Player, Y, 0.0)
+  session.insert(Player, Pos, (0.0, 0.0))
   session.insert(Player, Facing, Down)
   session.insert(Player, Moving, false)
   session.insert(Player, MaxHp, c.maxHp)
@@ -620,22 +591,22 @@ proc stepSystems*(session: var Session[Fact, FactMatch], dt: float): StepEvents 
   let player = session.query(gameRules.getPlayer)
   let (st) = session.query(gameRules.getStats)
   let (ww, wh) = session.query(gameRules.getWorld)
-  let (tt, gameTime) = session.query(gameRules.getTime)
   let enemies = session.queryAll(gameRules.getEnemies)
   let projs = session.queryAll(gameRules.getProjectiles)
   let pickups = session.queryAll(gameRules.getPickups)
-  let minute = int(gameTime / 60)
+  let px = player.pos.x
+  let py = player.pos.y
 
   # 1. projectile hits
   var hpDelta = initTable[int, float]()
   var newHitIds = initTable[int, IntSet]()
+  var projIndex = initTable[int, int]()
+  for i, p in projs:
+    projIndex[p.id] = i
   for h in collide(projs, enemies):
     hpDelta[h.enemyId] = hpDelta.getOrDefault(h.enemyId) + h.damage
     if not newHitIds.hasKey(h.projId):
-      for p in projs:
-        if p.id == h.projId:
-          newHitIds[h.projId] = p.hitIds
-          break
+      newHitIds[h.projId] = projs[projIndex[h.projId]].hitIds
     newHitIds[h.projId].incl(h.enemyId)
     inc result.hits
   for p in projs:
@@ -654,6 +625,7 @@ proc stepSystems*(session: var Session[Fact, FactMatch], dt: float): StepEvents 
   var heal = 0.0
   var alive = 0
   var gemCount = pickups.countIt(it.kind.isGem)
+  var dead = initHashSet[int]()
   for e in enemies:
     var hp = e.hp
     if hpDelta.hasKey(e.id):
@@ -663,37 +635,48 @@ proc stepSystems*(session: var Session[Fact, FactMatch], dt: float): StepEvents 
         session.insert(e.id, HitFlash, hitFlashSecs)
     if hp <= 0:
       session.retractEnemy(e.id)
+      dead.incl(e.id)
       inc result.kills
       let d = enemyDefs[e.kind]
       if d.boss:
-        discard session.spawnPickup(Chest, e.x, e.y, 1)
+        discard session.spawnPickup(Chest, e.pos.x, e.pos.y, 1)
         result.bossKilled = true
       else:
         let r = rand(1.0)
         if r < chickenChance:
-          discard session.spawnPickup(Chicken, e.x, e.y, 0)
+          discard session.spawnPickup(Chicken, e.pos.x, e.pos.y, 0)
         elif r < chickenChance + coinChance:
-          discard session.spawnPickup(Coin, e.x, e.y, coinValue)
+          discard session.spawnPickup(Coin, e.pos.x, e.pos.y, coinValue)
         elif r < chickenChance + coinChance + vacuumChance:
-          discard session.spawnPickup(Vacuum, e.x, e.y, 0)
+          discard session.spawnPickup(Vacuum, e.pos.x, e.pos.y, 0)
         if gemCount < maxPickups:
-          discard session.spawnPickup(d.gem, e.x, e.y, gemValue(d.gem))
+          discard session.spawnPickup(d.gem, e.pos.x, e.pos.y, gemValue(d.gem))
           inc gemCount
         else:
           xpGain += gemValue(d.gem)
-    elif tooFar(e.x, e.y, player.x, player.y, ww, wh):
+    elif tooFar(e.pos.x, e.pos.y, px, py, ww, wh):
       session.retractEnemy(e.id)
+      dead.incl(e.id)
     else:
       inc alive
   session.insert(Global, EnemyCount, alive)
 
+  # 2b. keep enemies from stacking
+  var posOf = initTable[int, Vec2]()
+  for e in enemies:
+    posOf[e.id] = e.pos
+  for (id, dx, dy) in separate(enemies):
+    if id notin dead:
+      let p = posOf[id]
+      session.insert(id, Pos, (p.x + dx, p.y + dy))
+
   # 3. contact damage
-  let dmg = contactDamage(enemies, player.x, player.y, st.armor, dt)
+  let dmg = contactDamage(enemies, px, py, st.armor, dt)
   if dmg > 0:
     result.hurt = true
 
   # 4. pickups
-  let pr = scanPickups(pickups, player.x, player.y, baseMagnet * st.magnet)
+  let pr = scanPickups(pickups, px, py, baseMagnet * st.magnet)
   for i in pr.magnetize:
     session.insert(pickups[i].id, Magnetized, true)
   for i in pr.collected:
@@ -733,7 +716,7 @@ proc stepSystems*(session: var Session[Fact, FactMatch], dt: float): StepEvents 
     session.insert(Player, Hp, min(player.maxHp, player.hp - dmg + heal))
 
   # 6. targeting for the magic wand
-  let near = nearestEnemy(enemies, player.x, player.y)
+  let near = nearestEnemy(enemies, px, py)
   session.insert(Global, HasNearest, near.found)
   session.insert(Global, NearestX, near.x)
   session.insert(Global, NearestY, near.y)

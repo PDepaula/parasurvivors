@@ -214,81 +214,81 @@ proc projColor(kind: WeaponKind): Vec4[GLfloat] =
 proc drawWorld[G](game: G, ww, wh, tt: float) =
   let player = session.query(gameRules.getPlayer)
   var camera = mat3f(1)
-  camera.translate(player.x - ww / 2, player.y - wh / 2)
-  let minX = player.x - ww / 2 - 100
-  let maxX = player.x + ww / 2 + 100
-  let minY = player.y - wh / 2 - 100
-  let maxY = player.y + wh / 2 + 100
+  camera.translate(player.pos.x - ww / 2, player.pos.y - wh / 2)
+  let minX = player.pos.x - ww / 2 - 100
+  let maxX = player.pos.x + ww / 2 + 100
+  let minY = player.pos.y - wh / 2 - 100
+  let maxY = player.pos.y + wh / 2 + 100
 
-  drawGround(game, ww, wh, camera, player.x, player.y)
+  drawGround(game, ww, wh, camera, player.pos.x, player.pos.y)
 
   # pickups
   for p in session.queryAll(gameRules.getPickups):
-    if p.x < minX or p.x > maxX or p.y < minY or p.y > maxY:
+    if p.pos.x < minX or p.pos.x > maxX or p.pos.y < minY or p.pos.y > maxY:
       continue
     case p.kind
     of GemBlue, GemGreen, GemRed:
-      addRect(p.x, p.y, 10, 10, PI / 4, pickupColor(p.kind))
+      addRect(p.pos.x, p.pos.y, 10, 10, PI / 4, pickupColor(p.kind))
     of Chest:
-      addRect(p.x, p.y, 28, 20, 0, pickupColor(p.kind))
+      addRect(p.pos.x, p.pos.y, 28, 20, 0, pickupColor(p.kind))
     else:
-      addRect(p.x, p.y, 16, 16, 0, pickupColor(p.kind))
+      addRect(p.pos.x, p.pos.y, 16, 16, 0, pickupColor(p.kind))
   # garlic aura (drawn as two rotated squares)
   for w in session.queryAll(gameRules.getWeapons):
     if w.kind == Garlic:
       let r = weaponAt(Garlic, w.level).size * session.query(gameRules.getStats).stats.area
-      addRect(player.x, player.y, r * 2, r * 2, 0, projColor(Garlic))
-      addRect(player.x, player.y, r * 2, r * 2, PI / 4, projColor(Garlic))
+      addRect(player.pos.x, player.pos.y, r * 2, r * 2, 0, projColor(Garlic))
+      addRect(player.pos.x, player.pos.y, r * 2, r * 2, PI / 4, projColor(Garlic))
   flushShapes(game, ww, wh, camera, true)
 
   # enemies
   let enemies = session.queryAll(gameRules.getEnemies)
   for e in enemies:
-    if e.x < minX or e.x > maxX or e.y < minY or e.y > maxY:
+    if e.pos.x < minX or e.pos.x > maxX or e.pos.y < minY or e.pos.y > maxY:
       continue
     let d = enemyDefs[e.kind]
     let sh = sheets[d.sheet]
     let h = d.size
     let w = h * float(sh.frameW) / float(sh.frameH)
-    let dx = player.x - e.x
-    let dy = player.y - e.y
+    let dx = player.pos.x - e.pos.x
+    let dy = player.pos.y - e.pos.y
     let phase = int(tt / frameSecs) + e.id
     case e.kind
     of Bat:
-      addSprite(d.sheet, phase mod 3, 0, e.x, e.y, w, h)
+      addSprite(d.sheet, phase mod 3, 0, e.pos.x, e.pos.y, w, h)
     of Koalio:
-      addSprite(d.sheet, 2 + phase mod 3, 0, e.x, e.y, w, h, flip = dx < 0)
+      addSprite(d.sheet, 2 + phase mod 3, 0, e.pos.x, e.pos.y, w, h, flip = dx < 0)
     of Parakeet:
-      addSprite(d.sheet, phase mod 3, 0, e.x, e.y, w, h, flip = dx < 0)
+      addSprite(d.sheet, phase mod 3, 0, e.pos.x, e.pos.y, w, h, flip = dx < 0)
     else:
-      addSprite(d.sheet, 1 + phase mod 8, dirRow(dx, dy), e.x, e.y, w, h)
+      addSprite(d.sheet, 1 + phase mod 8, dirRow(dx, dy), e.pos.x, e.pos.y, w, h)
   # player
   block:
     let sheet = characterDefs[player.hero].sheet
     let col = if player.moving: 1 + int(tt / frameSecs) mod 8 else: 0
-    addSprite(sheet, col, player.facing.ord, player.x, player.y, 64, 64)
+    addSprite(sheet, col, player.facing.ord, player.pos.x, player.pos.y, 64, 64)
   flushSprites(game, ww, wh, camera)
 
   # projectiles and hit flashes
   for p in session.queryAll(gameRules.getProjectiles):
     case p.kind
     of Whip:
-      addRect(p.x, p.y, p.size, 12, 0, projColor(Whip))
+      addRect(p.pos.x, p.pos.y, p.size, 12, 0, projColor(Whip))
     of Knife:
-      addRect(p.x, p.y, 22, 6, p.angle, projColor(Knife))
+      addRect(p.pos.x, p.pos.y, 22, 6, p.angle, projColor(Knife))
     of Axe:
-      addRect(p.x, p.y, p.size * 1.4, p.size * 1.4, p.angle, projColor(Axe))
+      addRect(p.pos.x, p.pos.y, p.size * 1.4, p.size * 1.4, p.angle, projColor(Axe))
     of Garlic:
       discard
     else:
-      addRect(p.x, p.y, p.size * 1.6, p.size * 1.6, p.angle, projColor(p.kind))
+      addRect(p.pos.x, p.pos.y, p.size * 1.6, p.size * 1.6, p.angle, projColor(p.kind))
   for e in enemies:
-    if e.hitFlash > 0 and e.x >= minX and e.x <= maxX and e.y >= minY and e.y <= maxY:
-      addRect(e.x, e.y, e.size * 0.6, e.size * 0.6, 0, vec4(1f, 1f, 1f, 0.6f))
+    if e.hitFlash > 0 and e.pos.x >= minX and e.pos.x <= maxX and e.pos.y >= minY and e.pos.y <= maxY:
+      addRect(e.pos.x, e.pos.y, e.size * 0.6, e.size * 0.6, 0, vec4(1f, 1f, 1f, 0.6f))
   # hp bar under the player
-  addRect(player.x, player.y + 38, 40, 6, 0, vec4(0.3f, 0f, 0f, 0.9f))
+  addRect(player.pos.x, player.pos.y + 38, 40, 6, 0, vec4(0.3f, 0f, 0f, 0.9f))
   let hpFrac = max(0.0, player.hp / player.maxHp)
-  addRect(player.x - 20 + 20 * hpFrac, player.y + 38, 40 * hpFrac, 6, 0, vec4(0.2f, 0.9f, 0.2f, 0.9f))
+  addRect(player.pos.x - 20 + 20 * hpFrac, player.pos.y + 38, 40 * hpFrac, 6, 0, vec4(0.2f, 0.9f, 0.2f, 0.9f))
   flushShapes(game, ww, wh, camera, true)
 
 proc drawHud[G](game: G, ww, wh, gameTime: float) =

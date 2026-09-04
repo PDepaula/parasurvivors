@@ -2,6 +2,8 @@ import paranim/opengl
 import paranim/gl
 import pararules
 import sets, random
+when defined(perf):
+  import times
 import data, systems, rules, render, audio
 
 type
@@ -65,6 +67,8 @@ proc finishChoice(index: int) =
     session.insert(Global, Phase, Running)
 
 proc tick*(game: var Game) =
+  when defined(perf):
+    let tickStart = epochTime()
   session.insert(Global, TotalTime, game.totalTime)
   let (phase) = session.query(gameRules.getPhase)
   let (just) = session.query(gameRules.getJustPressed)
@@ -92,6 +96,8 @@ proc tick*(game: var Game) =
       session.insert(Global, DeltaTime, game.deltaTime)
       session.fireRules()
       let ev = session.stepSystems(game.deltaTime)
+      when defined(autoplay): # test aid: immortal, so a fastclock run reaches the late waves
+        session.insert(Player, Hp, session.query(gameRules.getPlayer).maxHp)
       session.fireRules()
       if ev.hits > 0: play(SfxHit)
       if ev.gems > 0: play(SfxGem)
@@ -122,5 +128,10 @@ proc tick*(game: var Game) =
     if just.pressed(KeyR, KeyEnter):
       session = session.resetSession()
       session.insert(Global, Phase, CharSelect)
+  when defined(perf):
+    let (tt, gameTime) = session.query(gameRules.getTime)
+    if int(gameTime) mod 5 == 0 and game.deltaTime > 0:
+      let work = (epochTime() - tickStart) * 1000
+      echo "t=", clockText(gameTime), " dt=", game.deltaTime * 1000, "ms work=", work, "ms enemies=", session.query(gameRules.getTargeting).enemyCount
   session.insert(Global, JustPressed, initHashSet[int]())
   drawFrame(game)

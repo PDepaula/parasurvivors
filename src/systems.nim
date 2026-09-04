@@ -39,14 +39,14 @@ proc cellOf(x, y: float): (int, int) =
 
 proc buildGrid*[E](enemies: openArray[E]): Table[(int, int), seq[int]] =
   for i, e in enemies:
-    result.mgetOrPut(cellOf(e.x, e.y), @[]).add(i)
+    result.mgetOrPut(cellOf(e.pos.x, e.pos.y), @[]).add(i)
 
 proc hitsEnemy[P, E](p: P, e: E): bool =
   if p.kind == Whip:
-    abs(e.x - p.x) < p.size / 2 + enemyRadius(e.size) and
-      abs(e.y - p.y) < whipHalfHeight + enemyRadius(e.size)
+    abs(e.pos.x - p.pos.x) < p.size / 2 + enemyRadius(e.size) and
+      abs(e.pos.y - p.pos.y) < whipHalfHeight + enemyRadius(e.size)
   else:
-    dist(p.x, p.y, e.x, e.y) < p.size + enemyRadius(e.size)
+    dist(p.pos.x, p.pos.y, e.pos.x, e.pos.y) < p.size + enemyRadius(e.size)
 
 proc collide*[P, E](projs: openArray[P], enemies: openArray[E]): seq[Hit] =
   ## Every (projectile, enemy) overlap this tick, honouring pierce and hitIds.
@@ -60,8 +60,8 @@ proc collide*[P, E](projs: openArray[P], enemies: openArray[E]): seq[Hit] =
     if allowed <= 0:
       continue
     let reach = p.size + 40.0
-    let (c0x, c0y) = cellOf(p.x - reach, p.y - reach)
-    let (c1x, c1y) = cellOf(p.x + reach, p.y + reach)
+    let (c0x, c0y) = cellOf(p.pos.x - reach, p.pos.y - reach)
+    let (c1x, c1y) = cellOf(p.pos.x + reach, p.pos.y + reach)
     block scan:
       for cx in c0x .. c1x:
         for cy in c0y .. c1y:
@@ -80,12 +80,12 @@ proc collide*[P, E](projs: openArray[P], enemies: openArray[E]): seq[Hit] =
 proc contactDamage*[E](enemies: openArray[E], px, py, armor, dt: float): float =
   ## Damage per tick from every enemy touching the player.
   for e in enemies:
-    if dist(e.x, e.y, px, py) < enemyRadius(e.size) + playerRadius:
+    if dist(e.pos.x, e.pos.y, px, py) < enemyRadius(e.size) + playerRadius:
       result += max(1.0, e.damage - armor) * dt
 
 proc scanPickups*[P](pickups: openArray[P], px, py, magnet: float): PickupResult =
   for i, p in pickups:
-    let d = dist(p.x, p.y, px, py)
+    let d = dist(p.pos.x, p.pos.y, px, py)
     if d < pickupRadius:
       result.collected.add i
     elif p.kind.isGem and not p.magnetized and d < magnet:
@@ -94,10 +94,10 @@ proc scanPickups*[P](pickups: openArray[P], px, py, magnet: float): PickupResult
 proc nearestEnemy*[E](enemies: openArray[E], px, py: float): tuple[found: bool, x, y: float] =
   var best = Inf
   for e in enemies:
-    let d = dist(e.x, e.y, px, py)
+    let d = dist(e.pos.x, e.pos.y, px, py)
     if d < best:
       best = d
-      result = (true, e.x, e.y)
+      result = (true, e.pos.x, e.pos.y)
 
 proc offscreenPoint*(px, py, ww, wh: float): (float, float) =
   ## Random point just outside the view rectangle centred on the player.
@@ -206,7 +206,7 @@ proc separate*[E](enemies: openArray[E]): seq[(int, float, float)] =
   let grid = buildGrid(enemies)
   var push = initTable[int, (float, float)]()
   for i, a in enemies:
-    let (cx, cy) = cellOf(a.x, a.y)
+    let (cx, cy) = cellOf(a.pos.x, a.pos.y)
     for ox in -1 .. 1:
       for oy in -1 .. 1:
         if not grid.hasKey((cx + ox, cy + oy)):
@@ -216,11 +216,11 @@ proc separate*[E](enemies: openArray[E]): seq[(int, float, float)] =
             continue
           let b = enemies[j]
           let minD = enemyRadius(a.size) + enemyRadius(b.size)
-          let d = dist(a.x, a.y, b.x, b.y)
+          let d = dist(a.pos.x, a.pos.y, b.pos.x, b.pos.y)
           if d < minD and d > 1e-6:
             let overlap = (minD - d) / 2
-            let nx = (a.x - b.x) / d
-            let ny = (a.y - b.y) / d
+            let nx = (a.pos.x - b.pos.x) / d
+            let ny = (a.pos.y - b.pos.y) / d
             var pa = push.getOrDefault(a.id)
             pa[0] += nx * overlap
             pa[1] += ny * overlap

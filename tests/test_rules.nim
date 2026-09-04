@@ -42,13 +42,13 @@ suite "rules: session and player":
     s.insert(Global, PressedKeys, toHashSet([KeyD]))
     s.step(0.5)
     var p = s.query(gameRules.getPlayer)
-    check abs(p.x - playerBaseSpeed * 0.5) < 1e-6
+    check abs(p.pos.x - playerBaseSpeed * 0.5) < 1e-6
     check p.facing == Right
     check p.moving
     s.insert(Global, PressedKeys, toHashSet([KeyUp]))
     s.step(0.5)
     p = s.query(gameRules.getPlayer)
-    check p.y < 0
+    check p.pos.y < 0
     check p.facing == Up
     s.insert(Global, PressedKeys, initHashSet[int]())
     s.step(0.5)
@@ -61,7 +61,7 @@ suite "rules: session and player":
     s.insert(Global, PressedKeys, toHashSet([KeyD, KeyS]))
     s.step(1.0)
     let p = s.query(gameRules.getPlayer)
-    check abs(sqrt(p.x * p.x + p.y * p.y) - playerBaseSpeed) < 1e-6
+    check abs(sqrt(p.pos.x * p.pos.x + p.pos.y * p.pos.y) - playerBaseSpeed) < 1e-6
 
   test "regen heals up to max hp":
     var s = newSession()
@@ -110,7 +110,7 @@ suite "rules: weapons and projectiles":
     let before = s.queryAll(gameRules.getProjectiles)[0]
     s.step(0.1)
     let after = s.query(gameRules.getProjectiles, id = before.id)
-    check after.x > before.x
+    check after.pos.x > before.pos.x
     check abs(after.ttl - (before.ttl - 0.1)) < 1e-9
 
   test "king bible orbits the player":
@@ -120,24 +120,23 @@ suite "rules: weapons and projectiles":
     s.step(0.25)
     let bibles = s.queryAll(gameRules.getProjectiles).filterIt(it.kind == KingBible)
     check bibles.len == 1
-    s.insert(Player, X, 500.0)
+    s.insert(Player, Pos, (500.0, 0.0))
     s.step(0.1)
     let b = s.query(gameRules.getProjectiles, id = bibles[0].id)
-    check abs(dist(b.x, b.y, 500.0, 0.0) - bibleOrbitRadius) < 1e-6
+    check abs(dist(b.pos.x, b.pos.y, 500.0, 0.0) - bibleOrbitRadius) < 1e-6
 
   test "runetracer bounces inside the view":
     var s = newSession()
     s.startRun(Lina)
     s.step(0.25)
     let r = s.queryAll(gameRules.getProjectiles)[0]
-    s.insert(r.id, X, 0.0)
-    s.insert(r.id, Y, 0.0)
+    s.insert(r.id, Pos, (0.0, 0.0))
     s.insert(r.id, VX, -1000.0)
     s.insert(r.id, VY, 0.0)
     s.step(1.0)
     let after = s.query(gameRules.getProjectiles, id = r.id)
     check after.vx > 0
-    check after.x >= -1024.0 / 2 / zoom
+    check after.pos.x >= -1024.0 / 2 / zoom
 
   test "insert/retract projectile round trip":
     var s = newSession()
@@ -154,8 +153,8 @@ suite "rules: enemies, waves, pickups":
     let id = s.spawnEnemy(Zombie, 100.0, 0.0, 0)
     s.step(0.5)
     let e = s.query(gameRules.getEnemies, id = id)
-    check e.x < 100.0
-    check abs(e.x - (100.0 - enemyDefs[Zombie].speed * 0.5)) < 1e-6
+    check e.pos.x < 100.0
+    check abs(e.pos.x - (100.0 - enemyDefs[Zombie].speed * 0.5)) < 1e-6
     check e.hp == enemyDefs[Zombie].hp
 
   test "enemy hp scales with the minute":
@@ -185,7 +184,7 @@ suite "rules: enemies, waves, pickups":
     check es.len >= waveFor(0).minCount
     for e in es:
       check e.kind == Bat
-      check abs(e.x) >= 1024.0 / 2 or abs(e.y) >= 768.0 / 2
+      check abs(e.pos.x) >= 1024.0 / 2 or abs(e.pos.y) >= 768.0 / 2
 
   test "bosses spawn once at their minute":
     var s = newSession()
@@ -201,10 +200,10 @@ suite "rules: enemies, waves, pickups":
     s.startRun(Otto)
     let id = s.spawnPickup(GemBlue, 200.0, 0.0, 1)
     s.step(0.1)
-    check s.query(gameRules.getPickups, id = id).x == 200.0
+    check s.query(gameRules.getPickups, id = id).pos.x == 200.0
     s.insert(id, Magnetized, true)
     s.step(0.1)
-    check s.query(gameRules.getPickups, id = id).x < 200.0
+    check s.query(gameRules.getPickups, id = id).pos.x < 200.0
 
   test "retract helpers remove every attribute":
     var s = newSession()
@@ -215,8 +214,8 @@ suite "rules: enemies, waves, pickups":
     s.retractPickup(p)
     check s.queryAll(gameRules.getEnemies).len == 0
     check s.queryAll(gameRules.getPickups).len == 0
-    check not s.contains(e, X)
-    check not s.contains(p, X)
+    check not s.contains(e, Pos)
+    check not s.contains(p, Pos)
 
 proc runTick(s: var Session[Fact, FactMatch], dt: float): StepEvents =
   s.insert(Global, DeltaTime, dt)
@@ -234,7 +233,7 @@ suite "rules: systems step, level up, death":
     let ev = s.runTick(0.001)
     check ev.hits == 1
     check ev.kills == 1
-    check not s.contains(e, X)
+    check not s.contains(e, Pos)
     check s.queryAll(gameRules.getProjectiles).len == 0 # pierce 0 → consumed
     let gems = s.queryAll(gameRules.getPickups)
     check gems.len >= 1
@@ -318,4 +317,4 @@ suite "rules: systems step, level up, death":
     s.startRun(Otto)
     discard s.spawnEnemy(Bat, 5000.0, 0.0, 0)
     discard s.runTick(0.001)
-    check s.queryAll(gameRules.getEnemies).allIt(it.x < 5000.0)
+    check s.queryAll(gameRules.getEnemies).allIt(it.pos.x < 5000.0)

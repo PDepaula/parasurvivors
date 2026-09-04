@@ -2,15 +2,15 @@ import unittest, sets, math, random
 import data, systems
 
 type
-  E = tuple[id: int, kind: EnemyKind, x, y, hp, damage, size: float]
-  P = tuple[id: int, kind: WeaponKind, x, y, size, damage: float, pierce: int, hitIds: HashSet[int], ttl: float]
-  K = tuple[id: int, kind: PickupKind, x, y: float, magnetized: bool]
+  E = tuple[id: int, kind: EnemyKind, pos: Vec2, hp, damage, size: float]
+  P = tuple[id: int, kind: WeaponKind, pos: Vec2, size, damage: float, pierce: int, hitIds: HashSet[int], ttl: float]
+  K = tuple[id: int, kind: PickupKind, pos: Vec2, magnetized: bool]
 
 proc enemy(id: int, x, y: float, kind = Bat): E =
-  (id, kind, x, y, enemyDefs[kind].hp, enemyDefs[kind].damage, enemyDefs[kind].size)
+  (id, kind, (x, y), enemyDefs[kind].hp, enemyDefs[kind].damage, enemyDefs[kind].size)
 
 proc proj(id: int, x, y: float, kind = MagicWand, pierce = 0, size = 10.0): P =
-  (id, kind, x, y, size, 10.0, pierce, initHashSet[int](), 1.0)
+  (id, kind, (x, y), size, 10.0, pierce, initHashSet[int](), 1.0)
 
 suite "systems":
   test "collide hits overlapping enemy only":
@@ -48,7 +48,7 @@ suite "systems":
     check contactDamage(es, 500, 500, 0.0, 1.0) == 0.0
 
   test "pickups: collect within radius, magnetize gems within magnet":
-    let ks: seq[K] = @[(1, GemBlue, 5.0, 0.0, false), (2, GemBlue, 40.0, 0.0, false), (3, Chicken, 40.0, 0.0, false), (4, GemRed, 900.0, 0.0, false)]
+    let ks: seq[K] = @[(1, GemBlue, (5.0, 0.0), false), (2, GemBlue, (40.0, 0.0), false), (3, Chicken, (40.0, 0.0), false), (4, GemRed, (900.0, 0.0), false)]
     let r = scanPickups(ks, 0, 0, 60.0)
     check r.collected == @[0]
     check r.magnetize == @[1]
