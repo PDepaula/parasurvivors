@@ -473,6 +473,34 @@ let (initSession, rulesInternal) =
         session.insert(id, X, x + ddx * v)
         session.insert(id, Y, y + ddy * v)
 
+    # ---- reactive rules
+    rule levelUp(Fact):
+      what:
+        (Player, Xp, xp)
+        (Player, XpToNext, need, then = false)
+        (Player, Level, level, then = false)
+        (Global, PendingLevelUps, pending, then = false)
+      cond:
+        xp >= need
+      then:
+        session.insert(Player, Level, level + 1)
+        session.insert(Player, XpToNext, xpForLevel(level + 1))
+        session.insert(Global, PendingLevelUps, pending + 1)
+        session.insert(Player, Xp, xp - need)
+
+    rule playerDied(Fact):
+      what:
+        (Player, Hp, hp)
+        (Global, GameTime, t, then = false)
+        (Global, Phase, phase, then = false)
+      cond:
+        hp <= 0
+        phase == Running
+      then:
+        session.insert(Global, Phase, GameOver)
+        session.insert(Global, ResultText,
+          if t >= float(runLengthSecs): "You survived until dawn!" else: "Slain at " & clockText(t))
+
 let gameRules* = rulesInternal
 
 # ---------------------------------------------------------------- session
@@ -579,3 +607,165 @@ proc startRun*(session: var Session[Fact, FactMatch], hero: CharacterKind) =
   session.insert(Global, PendingLevelUps, 0)
   session.insert(Global, ResultText, "")
   session.insert(Global, Phase, Running)
+
+# ---------------------------------------------------------------- per-tick systems
+
+type
+  StepEvents* = object
+    hits*, kills*, gems*: int
+    hurt*, chest*, chicken*, coin*, bossKilled*: bool
+
+proc stepSystems*(session: var Session[Fact, FactMatch], dt: float): StepEvents =
+  ## Runs after fireRules: N×M work on plain seqs, then writes results back.
+  let player = session.query(gameRules.getPlayer)
+  let (st) = session.query(gameRules.getStats)
+  let (ww, wh) = session.query(gameRules.getWorld)
+  let (tt, gameTime) = session.query(gameRules.getTime)
+  let enemies = session.queryAll(gameRules.getEnemies)
+  let projs = session.queryAll(gameRules.getProjectiles)
+  let pickups = session.queryAll(gameRules.getPickups)
+  let minute = int(gameTime / 60)
+
+  # 1. projectile hits
+  var hpDelta = initTable[int, float]()
+  var newHitIds = initTable[int, IntSet]()
+  for h in collide(projs, enemies):
+    hpDelta[h.enemyId] = hpDelta.getOrDefault(h.enemyId) + h.damage
+    if not newHitIds.hasKey(h.projId):
+      for p in projs:
+        if p.id == h.projId:
+          newHitIds[h.projId] = p.hitIds
+          break
+    newHitIds[h.projId].incl(h.enemyId)
+    inc result.hits
+  for p in projs:
+    if p.ttl <= 0:
+      session.retractProjectile(p.id)
+    elif newHitIds.hasKey(p.id):
+      let ids = newHitIds[p.id]
+      if ids.len > p.pierce:
+        session.retractProjectile(p.id)
+      else:
+        session.insert(p.id, HitIds, ids)
+
+  # 2. damage, deaths, drops, despawn
+  var xpGain = 0
+  var goldGain = 0
+  var heal = 0.0
+  var alive = 0
+  var gemCount = pickups.countIt(it.kind.isGem)
+  for e in enemies:
+    var hp = e.hp
+    if hpDelta.hasKey(e.id):
+      hp -= hpDelta[e.id]
+      if hp > 0:
+        session.insert(e.id, Hp, hp)
+        session.insert(e.id, HitFlash, hitFlashSecs)
+    if hp <= 0:
+      session.retractEnemy(e.id)
+      inc result.kills
+      let d = enemyDefs[e.kind]
+      if d.boss:
+        discard session.spawnPickup(Chest, e.x, e.y, 1)
+        result.bossKilled = true
+      else:
+        let r = rand(1.0)
+        if r < chickenChance:
+          discard session.spawnPickup(Chicken, e.x, e.y, 0)
+        elif r < chickenChance + coinChance:
+          discard session.spawnPickup(Coin, e.x, e.y, coinValue)
+        elif r < chickenChance + coinChance + vacuumChance:
+          discard session.spawnPickup(Vacuum, e.x, e.y, 0)
+        if gemCount < maxPickups:
+          discard session.spawnPickup(d.gem, e.x, e.y, gemValue(d.gem))
+          inc gemCount
+        else:
+          xpGain += gemValue(d.gem)
+    elif tooFar(e.x, e.y, player.x, player.y, ww, wh):
+      session.retractEnemy(e.id)
+    else:
+      inc alive
+  session.insert(Global, EnemyCount, alive)
+
+  # 3. contact damage
+  let dmg = contactDamage(enemies, player.x, player.y, st.armor, dt)
+  if dmg > 0:
+    result.hurt = true
+
+  # 4. pickups
+  let pr = scanPickups(pickups, player.x, player.y, baseMagnet * st.magnet)
+  for i in pr.magnetize:
+    session.insert(pickups[i].id, Magnetized, true)
+  for i in pr.collected:
+    let p = pickups[i]
+    case p.kind
+    of GemBlue, GemGreen, GemRed:
+      xpGain += p.value
+      inc result.gems
+    of Chicken:
+      heal += chickenHeal
+      result.chicken = true
+    of Coin:
+      goldGain += p.value
+      result.coin = true
+    of Chest:
+      result.chest = true
+      let upgradable = session.queryAll(gameRules.getWeapons).filterIt(it.level < maxWeaponLevel)
+      if upgradable.len > 0:
+        let w = upgradable[rand(upgradable.high)]
+        session.insert(w.id, WeaponLevel, w.level + 1)
+      else:
+        goldGain += chestGoldFallback
+    of Vacuum:
+      for g in pickups:
+        if g.kind.isGem:
+          session.insert(g.id, Magnetized, true)
+    session.retractPickup(p.id)
+
+  # 5. write player deltas
+  if xpGain > 0:
+    session.insert(Player, Xp, player.xp + xpGain)
+  if goldGain > 0:
+    session.insert(Player, Gold, player.gold + goldGain)
+  if result.kills > 0:
+    session.insert(Player, Kills, player.kills + result.kills)
+  if dmg > 0 or heal > 0:
+    session.insert(Player, Hp, min(player.maxHp, player.hp - dmg + heal))
+
+  # 6. targeting for the magic wand
+  let near = nearestEnemy(enemies, player.x, player.y)
+  session.insert(Global, HasNearest, near.found)
+  session.insert(Global, NearestX, near.x)
+  session.insert(Global, NearestY, near.y)
+
+# ---------------------------------------------------------------- level-up flow
+
+proc prepareChoices*(session: var Session[Fact, FactMatch]) =
+  let owned = session.queryAll(gameRules.getWeapons).mapIt((it.kind, it.level))
+  let ownedPassives = session.queryAll(gameRules.getPassives).mapIt((it.kind, it.level))
+  var choices: Choices
+  new(choices)
+  choices[] = generateChoices(owned, ownedPassives)
+  session.insert(Global, ChoiceList, choices)
+  session.insert(Global, SelectedIndex, 0)
+
+proc applyChoice*(session: var Session[Fact, FactMatch], c: Choice) =
+  case c.kind
+  of NewWeapon:
+    session.addWeapon(c.weapon)
+  of UpgradeWeapon:
+    for w in session.queryAll(gameRules.getWeapons):
+      if w.kind == c.weapon:
+        session.insert(w.id, WeaponLevel, c.level)
+  of NewPassive:
+    session.addPassive(c.passive)
+  of UpgradePassive:
+    for p in session.queryAll(gameRules.getPassives):
+      if p.kind == c.passive:
+        session.insert(p.id, PassiveLevel, c.level)
+  of BonusGold:
+    session.insert(Player, Gold, session.query(gameRules.getPlayer).gold + 25)
+  of BonusHeal:
+    let p = session.query(gameRules.getPlayer)
+    session.insert(Player, Hp, min(p.maxHp, p.hp + chickenHeal))
+  session.recomputeStats()

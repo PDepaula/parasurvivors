@@ -217,3 +217,105 @@ suite "rules: enemies, waves, pickups":
     check s.queryAll(gameRules.getPickups).len == 0
     check not s.contains(e, X)
     check not s.contains(p, X)
+
+proc runTick(s: var Session[Fact, FactMatch], dt: float): StepEvents =
+  s.insert(Global, DeltaTime, dt)
+  s.insert(Global, TotalTime, dt)
+  s.fireRules()
+  result = s.stepSystems(dt)
+  s.fireRules()
+
+suite "rules: systems step, level up, death":
+  test "projectile kills enemy, drops a gem, counts the kill":
+    var s = newSession()
+    s.startRun(Otto)
+    let e = s.spawnEnemy(Bat, 50.0, 0.0, 0)
+    discard s.insertProjectile(ProjSpec(kind: MagicWand, x: 50, y: 0, size: 10, damage: 5, ttl: 1, pierce: 0))
+    let ev = s.runTick(0.001)
+    check ev.hits == 1
+    check ev.kills == 1
+    check not s.contains(e, X)
+    check s.queryAll(gameRules.getProjectiles).len == 0 # pierce 0 → consumed
+    let gems = s.queryAll(gameRules.getPickups)
+    check gems.len >= 1
+    check gems.anyIt(it.kind == GemBlue)
+    check s.query(gameRules.getPlayer).kills == 1
+
+  test "surviving enemy takes damage and flashes; piercing projectile survives":
+    var s = newSession()
+    s.startRun(Otto)
+    let e = s.spawnEnemy(Koalio, 0.0, 0.0, 0)
+    let p = s.insertProjectile(ProjSpec(kind: Knife, x: 0, y: 0, size: 10, damage: 5, ttl: 1, pierce: 3))
+    discard s.runTick(0.001)
+    let en = s.query(gameRules.getEnemies, id = e)
+    check abs(en.hp - (enemyDefs[Koalio].hp - 5)) < 1e-6
+    check en.hitFlash > 0
+    let pr = s.query(gameRules.getProjectiles, id = p)
+    check pr.hitIds.contains(e)
+    discard s.runTick(0.001)
+    check abs(s.query(gameRules.getEnemies, id = e).hp - (enemyDefs[Koalio].hp - 5)) < 1e-6 # hit only once
+
+  test "boss drops a chest which upgrades a weapon":
+    var s = newSession()
+    s.startRun(Otto)
+    let e = s.spawnEnemy(Koalio, 0.0, 0.0, 0)
+    s.insert(e, Hp, 1.0)
+    discard s.insertProjectile(ProjSpec(kind: Knife, x: 0, y: 0, size: 10, damage: 5, ttl: 1, pierce: 3))
+    let ev = s.runTick(0.001)
+    check ev.bossKilled
+    check s.queryAll(gameRules.getPickups).anyIt(it.kind == Chest)
+    let ev2 = s.runTick(0.001) # chest sits on the player → collected
+    check ev2.chest
+    check s.queryAll(gameRules.getWeapons)[0].level == 2
+
+  test "touching enemies hurts the player":
+    var s = newSession()
+    s.startRun(Otto)
+    discard s.spawnEnemy(Zombie, 5.0, 0.0, 0)
+    let ev = s.runTick(0.5)
+    check ev.hurt
+    check s.query(gameRules.getPlayer).hp < 120.0
+
+  test "gems give xp and trigger a pending level up":
+    var s = newSession()
+    s.startRun(Otto)
+    discard s.spawnPickup(GemRed, 0.0, 0.0, 5)
+    let ev = s.runTick(0.001)
+    check ev.gems == 1
+    let p = s.query(gameRules.getPlayer)
+    check p.level == 2
+    check p.xp == 0
+    check p.xpToNext == xpForLevel(2)
+    let m = s.query(gameRules.getMenu)
+    check m.pending == 1
+
+  test "prepareChoices and applyChoice":
+    var s = newSession()
+    s.startRun(Otto)
+    s.prepareChoices()
+    let m = s.query(gameRules.getMenu)
+    check m.choices != nil
+    check m.choices[].len == 3
+    s.applyChoice(Choice(kind: NewPassive, passive: Spinach, level: 1))
+    check s.queryAll(gameRules.getPassives).len == 1
+    check abs(s.query(gameRules.getStats).stats.might - 1.2) < 1e-9
+    s.applyChoice(Choice(kind: UpgradeWeapon, weapon: Whip, level: 2))
+    check s.queryAll(gameRules.getWeapons)[0].level == 2
+    s.applyChoice(Choice(kind: NewPassive, passive: HollowHeart, level: 1))
+    check s.query(gameRules.getPlayer).maxHp == 144.0
+
+  test "player death ends the run with a result":
+    var s = newSession()
+    s.startRun(Otto)
+    s.insert(Player, Hp, 0.0)
+    s.fireRules()
+    let (phase) = s.query(gameRules.getPhase)
+    check phase == GameOver
+    check s.query(gameRules.getMenu).resultText.len > 0
+
+  test "far enemies despawn and the count is refreshed":
+    var s = newSession()
+    s.startRun(Otto)
+    discard s.spawnEnemy(Bat, 5000.0, 0.0, 0)
+    discard s.runTick(0.001)
+    check s.queryAll(gameRules.getEnemies).allIt(it.x < 5000.0)
