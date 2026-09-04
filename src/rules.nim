@@ -249,6 +249,102 @@ let (initSession, rulesInternal) =
       then:
         session.insert(Player, Hp, min(maxHp, hp + st.regen * dt))
 
+    rule tickWeapons(Fact):
+      what:
+        (Global, DeltaTime, dt)
+        (Global, HasNearest, hasNearest, then = false)
+        (Global, NearestX, nx, then = false)
+        (Global, NearestY, ny, then = false)
+        (Player, X, px, then = false)
+        (Player, Y, py, then = false)
+        (Player, Facing, facing, then = false)
+        (Player, PlayerStats, st, then = false)
+        (id, Weapon, kind, then = false)
+        (id, WeaponLevel, level, then = false)
+        (id, Cooldown, cd, then = false)
+      then:
+        let cd2 = cd - dt
+        if cd2 > 0:
+          session.insert(id, Cooldown, cd2)
+        else:
+          for spec in attackPlan(kind, level, st, px, py, facing, hasNearest, nx, ny):
+            let pid = allocId()
+            session.insert(pid, Proj, spec.kind)
+            session.insert(pid, X, spec.x)
+            session.insert(pid, Y, spec.y)
+            session.insert(pid, VX, spec.vx)
+            session.insert(pid, VY, spec.vy)
+            session.insert(pid, Ttl, spec.ttl)
+            session.insert(pid, Pierce, spec.pierce)
+            session.insert(pid, HitIds, initHashSet[int]())
+            session.insert(pid, Angle, spec.angle)
+            session.insert(pid, Size, spec.size)
+            session.insert(pid, Damage, spec.damage)
+          session.insert(id, Cooldown, weaponAt(kind, level).cooldown * st.cooldownMul)
+
+    rule moveProjectiles(Fact):
+      what:
+        (Global, DeltaTime, dt)
+        (Global, WorldWidth, ww, then = false)
+        (Global, WorldHeight, wh, then = false)
+        (Player, X, px, then = false)
+        (Player, Y, py, then = false)
+        (id, Proj, kind, then = false)
+        (id, X, x, then = false)
+        (id, Y, y, then = false)
+        (id, VX, vx, then = false)
+        (id, VY, vy, then = false)
+        (id, Ttl, ttl, then = false)
+        (id, Angle, angle, then = false)
+      then:
+        session.insert(id, Ttl, ttl - dt)
+        case kind
+        of Whip:
+          discard # stays where it was spawned
+        of Garlic:
+          session.insert(id, X, px)
+          session.insert(id, Y, py)
+        of KingBible:
+          # vx = angular speed, vy = orbit radius (see systems.attackPlan)
+          let a = angle + vx * dt
+          session.insert(id, Angle, a)
+          session.insert(id, X, px + cos(a) * vy)
+          session.insert(id, Y, py + sin(a) * vy)
+        of Axe:
+          let vy2 = vy + axeGravity * dt
+          session.insert(id, VY, vy2)
+          session.insert(id, X, x + vx * dt)
+          session.insert(id, Y, y + vy2 * dt)
+          session.insert(id, Angle, angle + 10 * dt)
+        of Runetracer:
+          var nx = x + vx * dt
+          var ny = y + vy * dt
+          var nvx = vx
+          var nvy = vy
+          let left = px - ww / 2
+          let right = px + ww / 2
+          let top = py - wh / 2
+          let bottom = py + wh / 2
+          if nx < left:
+            nx = left
+            nvx = abs(vx)
+          elif nx > right:
+            nx = right
+            nvx = -abs(vx)
+          if ny < top:
+            ny = top
+            nvy = abs(vy)
+          elif ny > bottom:
+            ny = bottom
+            nvy = -abs(vy)
+          session.insert(id, X, nx)
+          session.insert(id, Y, ny)
+          session.insert(id, VX, nvx)
+          session.insert(id, VY, nvy)
+        of MagicWand, Knife:
+          session.insert(id, X, x + vx * dt)
+          session.insert(id, Y, y + vy * dt)
+
 let gameRules* = rulesInternal
 
 # ---------------------------------------------------------------- session
@@ -302,6 +398,24 @@ proc addPassive*(session: var Session[Fact, FactMatch], kind: PassiveKind, level
   let id = allocId()
   session.insert(id, Passive, kind)
   session.insert(id, PassiveLevel, level)
+
+proc insertProjectile*(session: var Session[Fact, FactMatch], spec: ProjSpec): int =
+  result = allocId()
+  session.insert(result, Proj, spec.kind)
+  session.insert(result, X, spec.x)
+  session.insert(result, Y, spec.y)
+  session.insert(result, VX, spec.vx)
+  session.insert(result, VY, spec.vy)
+  session.insert(result, Ttl, spec.ttl)
+  session.insert(result, Pierce, spec.pierce)
+  session.insert(result, HitIds, initHashSet[int]())
+  session.insert(result, Angle, spec.angle)
+  session.insert(result, Size, spec.size)
+  session.insert(result, Damage, spec.damage)
+
+proc retractProjectile*(session: var Session[Fact, FactMatch], id: int) =
+  for a in [Proj, X, Y, VX, VY, Ttl, Pierce, HitIds, Angle, Size, Damage]:
+    session.retract(id, a)
 
 proc recomputeStats*(session: var Session[Fact, FactMatch]) =
   let p = session.query(gameRules.getPlayer)

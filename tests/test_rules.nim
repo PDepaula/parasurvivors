@@ -1,4 +1,4 @@
-import unittest, sets, math
+import unittest, sets, math, sequtils
 import pararules
 import data, systems, rules
 
@@ -89,3 +89,60 @@ suite "rules: session and player":
     let (phase) = s.query(gameRules.getPhase)
     check phase == Title
     check s.queryAll(gameRules.getWeapons).len == 0
+
+suite "rules: weapons and projectiles":
+  test "weapon fires when its cooldown expires and resets it":
+    var s = newSession()
+    s.startRun(Gino) # Knife, +1 amount
+    check s.queryAll(gameRules.getProjectiles).len == 0
+    s.step(0.25) # initial cooldown is 0.2
+    let ps = s.queryAll(gameRules.getProjectiles)
+    check ps.len == 2
+    check ps[0].kind == Knife
+    let w = s.queryAll(gameRules.getWeapons)[0]
+    check abs(w.cooldown - weaponDefs[Knife].cooldown) < 1e-6
+
+  test "projectiles move and age":
+    var s = newSession()
+    s.startRun(Gino)
+    s.insert(Player, Facing, Right)
+    s.step(0.25)
+    let before = s.queryAll(gameRules.getProjectiles)[0]
+    s.step(0.1)
+    let after = s.query(gameRules.getProjectiles, id = before.id)
+    check after.x > before.x
+    check abs(after.ttl - (before.ttl - 0.1)) < 1e-9
+
+  test "king bible orbits the player":
+    var s = newSession()
+    s.startRun(Otto)
+    s.addWeapon(KingBible)
+    s.step(0.25)
+    let bibles = s.queryAll(gameRules.getProjectiles).filterIt(it.kind == KingBible)
+    check bibles.len == 1
+    s.insert(Player, X, 500.0)
+    s.step(0.1)
+    let b = s.query(gameRules.getProjectiles, id = bibles[0].id)
+    check abs(dist(b.x, b.y, 500.0, 0.0) - bibleOrbitRadius) < 1e-6
+
+  test "runetracer bounces inside the view":
+    var s = newSession()
+    s.startRun(Lina)
+    s.step(0.25)
+    let r = s.queryAll(gameRules.getProjectiles)[0]
+    s.insert(r.id, X, 0.0)
+    s.insert(r.id, Y, 0.0)
+    s.insert(r.id, VX, -1000.0)
+    s.insert(r.id, VY, 0.0)
+    s.step(1.0)
+    let after = s.query(gameRules.getProjectiles, id = r.id)
+    check after.vx > 0
+    check after.x >= -1024.0 / 2 / zoom
+
+  test "insert/retract projectile round trip":
+    var s = newSession()
+    s.startRun(Otto)
+    let id = s.insertProjectile(ProjSpec(kind: Axe, x: 1, y: 2, vx: 3, vy: 4, size: 5, damage: 6, ttl: 7, angle: 0, pierce: 8))
+    check s.queryAll(gameRules.getProjectiles).len == 1
+    s.retractProjectile(id)
+    check s.queryAll(gameRules.getProjectiles).len == 0
