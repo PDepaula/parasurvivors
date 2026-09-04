@@ -2,7 +2,7 @@ import paranim/opengl
 import paranim/gl
 import pararules
 import sets, random
-import data, systems, rules, render
+import data, systems, rules, render, audio
 
 type
   Game* = object of RootGame
@@ -34,6 +34,9 @@ proc init*(game: var Game) =
   doAssert glInit()
   randomize()
   initRender(game)
+  initAudio()
+
+var musicOn = false
 
 proc pressed(just: HashSet[int], keys: varargs[int]): bool =
   for k in keys:
@@ -69,6 +72,8 @@ proc tick*(game: var Game) =
   of Title:
     when defined(autoplay): # test aid: skip the menus (nim c -d:autoplay -d:fastclock ...)
       session.startRun(Otto)
+      startMusic()
+      musicOn = true
     else:
       if just.pressed(KeyEnter, KeySpace):
         session.insert(Global, SelectedIndex, 0)
@@ -78,18 +83,26 @@ proc tick*(game: var Game) =
     if just.pressed(KeyEnter, KeySpace):
       let m = session.query(gameRules.getMenu)
       session.startRun(CharacterKind(m.selected))
+      startMusic()
+      musicOn = true
   of Running:
     if just.pressed(KeyEscape, KeyP):
       session.insert(Global, Phase, Paused)
     else:
       session.insert(Global, DeltaTime, game.deltaTime)
       session.fireRules()
-      discard session.stepSystems(game.deltaTime)
+      let ev = session.stepSystems(game.deltaTime)
       session.fireRules()
+      if ev.hits > 0: play(SfxHit)
+      if ev.gems > 0: play(SfxGem)
+      if ev.hurt: play(SfxHurt)
+      if ev.chest: play(SfxChest)
+      if ev.bossKilled: play(SfxBoss)
       let m = session.query(gameRules.getMenu)
       if m.pending > 0:
         session.prepareChoices()
         session.insert(Global, Phase, LevelUp)
+        play(SfxLevelUp)
   of LevelUp:
     moveSelection(just, 3)
     when defined(autoplay):
@@ -103,6 +116,9 @@ proc tick*(game: var Game) =
     if just.pressed(KeyEscape, KeyP):
       session.insert(Global, Phase, Running)
   of GameOver:
+    if musicOn:
+      stopMusic()
+      musicOn = false
     if just.pressed(KeyR, KeyEnter):
       session = session.resetSession()
       session.insert(Global, Phase, CharSelect)
