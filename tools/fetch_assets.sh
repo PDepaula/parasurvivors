@@ -143,7 +143,10 @@ icon axe "$(layer weapon/blunt/waraxe/behind/walk/waraxe.png)" "$(layer weapon/b
 icon boomerang $(cell "$ITEMS" 9 8)
 icon shield "$(layer shield/round/walk/brown.png)" +repage -crop 64x64+0+128 +repage
 icon garlic $(cell "$FOOD" 23 15)
-icon aura $(cell "$EFFECTS" 16 2) -channel A -evaluate multiply 0.35 +channel
+# the garlic range marker: a soft ring drawn here rather than an effects cell, because any filled
+# 32 px cell turns into a translucent square once it is scaled up to the aura's diameter
+icon aura -size 64x64 xc:none -fill none -stroke '#e6ffd8' -strokewidth 4 -draw 'circle 31.5,31.5 31.5,5.5' \
+  -blur 0x1.2 -channel A -evaluate multiply 0.55 +channel
 icon spark $(cell "$EFFECTS" 11 0)
 # pickups
 icon gemblue $(cell "$ITEMS" 12 4)
