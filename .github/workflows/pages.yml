@@ -1,0 +1,52 @@
+# Builds the emscripten target and publishes web/ to GitHub Pages.
+# The art is committed under src/assets, so this needs no download step.
+name: web
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: '2.2.10'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 6.0.9
+
+      - run: nimble install -d -y
+
+      # -d:noaudio: the audio build embeds a 31 MB soundfont, too much to download.
+      - run: nimble build -d:release -d:emscripten -d:noaudio
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

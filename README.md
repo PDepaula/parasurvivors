@@ -50,6 +50,31 @@ required until the sound effects are pre-rendered (see
 
 ![The wasm build at minute 20 in headless Chromium](docs/screenshots/web-chromium.png)
 
+#### Putting it on the web
+
+`web/` is three plain static files, so any static host serves it -- there is no server side.
+`.github/workflows/pages.yml` builds the emscripten target on every push to `main` and publishes
+it to GitHub Pages at <https://pdepaula.github.io/parasurvivors/>. It runs once Pages is pointed
+at Actions:
+
+```sh
+gh api -X POST repos/PDepaula/parasurvivors/pages -f 'build_type=workflow'
+gh workflow run web    # or just push to main
+```
+
+Any other host works the same way -- upload the contents of `web/` and hand out the URL. The one
+requirement is that `.wasm` is served as `application/wasm`; GitHub Pages, Netlify, Cloudflare
+Pages and itch.io all do.
+
+Adding `-d:singlefile` base64-inlines the wasm into the page, so `web/index.html` becomes one
+self-contained 3 MB file that needs no host at all -- mail it, and it also runs straight off
+`file://`:
+
+```sh
+nimble build -d:release -d:emscripten -d:noaudio -d:singlefile
+xdg-open web/index.html
+```
+
 ### Controls
 
 | Key | Action |
@@ -60,8 +85,15 @@ required until the sound effects are pre-rendered (see
 | `1` `2` `3` | pick a level-up directly |
 | `Esc` or `P` | pause / resume |
 | `R` | retry after a game over |
+| `F3` | toggle the fps overlay |
 
 Weapons fire by themselves. Your only job is to not get touched.
+
+`F3` puts `fps`, frame ms, sim ms and the live enemy count in the bottom-right corner, in every
+build including the web one. Both timings are smoothed over about half a second. `sim` is the tick's
+own work, measured before the draw call, so it is the number to watch: the browser loop is
+`requestAnimationFrame`, which pins fps to the display refresh and only sags once `sim` eats the
+whole frame budget (16.7 ms at 60 Hz).
 
 ## A run, in pictures
 
@@ -144,6 +176,7 @@ All of these go after `nimble build` or `nim c`:
 | `-d:perf` | print per-tick work time and enemy count every 5 game seconds |
 | `-d:keyscript` | feed scripted key presses from `PS_KEYS` (see `tools/screenshots.sh`) |
 | `-d:emscripten` | WebAssembly build into `web/`; needs `emcc` on the path and `-d:noaudio` |
+| `-d:singlefile` | with `-d:emscripten`, inline the wasm so `web/index.html` is one standalone file |
 
 `-d:fastclock -d:autoplay` together is the "reach minute 30 unattended" test.
 

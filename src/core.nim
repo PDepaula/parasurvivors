@@ -1,9 +1,7 @@
 import paranim/opengl
 import paranim/gl
 import pararules
-import sets, random
-when defined(perf):
-  import times
+import sets, random, times
 import data, systems, rules, render, audio
 
 type
@@ -67,11 +65,12 @@ proc finishChoice(index: int) =
     session.insert(Global, Phase, Running)
 
 proc tick*(game: var Game) =
-  when defined(perf):
-    let tickStart = epochTime()
+  let tickStart = epochTime()
   session.insert(Global, TotalTime, game.totalTime)
   let (phase) = session.query(gameRules.getPhase)
   let (just) = session.query(gameRules.getJustPressed)
+  if just.pressed(KeyF3):
+    toggleStats()
   case phase
   of Title:
     when defined(autoplay): # test aid: skip the menus (nim c -d:autoplay -d:fastclock ...)
@@ -134,4 +133,7 @@ proc tick*(game: var Game) =
       let work = (epochTime() - tickStart) * 1000
       echo "t=", clockText(gameTime), " dt=", game.deltaTime * 1000, "ms work=", work, "ms enemies=", session.query(gameRules.getTargeting).enemyCount
   session.insert(Global, JustPressed, initHashSet[int]())
+  # Timed before drawFrame, so "sim" is the tick's own work, not the draw.
+  recordStats(game.deltaTime, epochTime() - tickStart,
+              session.query(gameRules.getTargeting).enemyCount)
   drawFrame(game)

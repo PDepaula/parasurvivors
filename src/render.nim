@@ -8,7 +8,7 @@ from paranim/primitives import nil
 import paratext, paratext/gl/text
 import stb_image/read as stbi
 import pararules
-import math, sequtils
+import math, sequtils, strutils
 import data, systems, rules
 
 const
@@ -203,6 +203,38 @@ proc drawText*[G](game: G, s: string, x, y, ww, wh: float, color = white, scale 
 
 proc drawTextCentered*[G](game: G, s: string, cy, ww, wh: float, color = white, scale = 1.0) =
   drawText(game, s, ww / 2 - textWidth(s, scale) / 2, cy, ww, wh, color, scale)
+
+# ---------------------------------------------------------------- stats overlay
+
+var
+  statsVisible = false
+  statsDt = 0.0   # seconds/frame, smoothed
+  statsWork = 0.0 # seconds of sim per tick, smoothed
+  statsEnemies = 0
+
+proc toggleStats*() =
+  statsVisible = not statsVisible
+
+proc recordStats*(dt, work: float, enemies: int) =
+  ## Feeds one tick's timings to the F3 overlay. Both numbers are an exponential
+  ## moving average over roughly half a second, otherwise they are unreadable.
+  if dt <= 0:
+    return
+  let a = min(1.0, dt / 0.5)
+  statsDt = if statsDt == 0.0: dt else: statsDt + (dt - statsDt) * a
+  statsWork = statsWork + (work - statsWork) * a
+  statsEnemies = enemies
+
+proc drawStats[G](game: G, ww, wh: float) =
+  if not statsVisible or statsDt <= 0:
+    return
+  # On the web the loop is requestAnimationFrame, so fps is pinned to the display
+  # refresh and only drops once sim exceeds the frame budget -- watch sim, not fps.
+  let s = $int(round(1.0 / statsDt)) & " fps   " &
+          formatFloat(statsDt * 1000, ffDecimal, 1) & " ms   sim " &
+          formatFloat(statsWork * 1000, ffDecimal, 2) & " ms   " &
+          $statsEnemies & " enemies"
+  drawText(game, s, ww - textWidth(s, 0.8) - 10, wh - 26, ww, wh, white, 0.8)
 
 # ---------------------------------------------------------------- world
 
@@ -410,3 +442,4 @@ proc drawFrame*[G](game: G) =
   of GameOver:
     drawWorld(game, ww, wh, tt)
     drawGameOver(game, ww, wh)
+  drawStats(game, ww, wh)
