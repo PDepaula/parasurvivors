@@ -142,7 +142,7 @@ icon axe "$(layer weapon/blunt/waraxe/behind/walk/waraxe.png)" "$(layer weapon/b
 icon boomerang $(cell "$ITEMS" 9 8)
 icon shield "$(layer shield/round/walk/brown.png)" +repage -crop 64x64+0+128 +repage
 icon garlic $(cell "$FOOD" 23 15)
-icon aura $(cell "$EFFECTS" 16 3) -channel A -evaluate multiply 0.35 +channel
+icon aura $(cell "$EFFECTS" 16 2) -channel A -evaluate multiply 0.35 +channel
 icon spark $(cell "$EFFECTS" 11 0)
 # pickups
 icon gemblue $(cell "$ITEMS" 12 4)

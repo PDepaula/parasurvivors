@@ -150,7 +150,7 @@ swapped (`walk` → `thrust`, `slash`, `shoot`, `spellcast`); all exist at the s
 | `boomerang` icon | Reemax items sheet cell (9,8) (green boomerang; simpler than cutting the 192 px throw sheet) | 32 |
 | `shield` icon | `shield/round/walk/brown.png` (576×256), down row (front view), frame 0, trimmed | |
 | gems, coin, chicken, passives | Reemax "[LPC] Items and game effects" `items1.png` (32 px cells, verified): coin (9,0), gem_red (12,3), gem_blue (12,4), gem_green (12,5), chicken (8,6), tome (0,9), potion_red (3,5), platemail (0,1), boots (13,3), leaf (8,4), apple (8,5), crystal orb (2,9) — https://opengameart.org/content/lpc-items-and-game-effects | 32 |
-| `bolt`, `aura`, `vacuum`, `spark` | same pack `effects.png` (verified): bolt = blue four-point sparkle (10,0), aura = blue ring (16,3) with alpha baked to 0.35, vacuum = purple burst (3,0), spark = blue burst (11,0) | 32 |
+| `bolt`, `aura`, `vacuum`, `spark` | same pack `effects.png` (verified): bolt = blue four-point sparkle (10,0), aura = round blue swirl (16,2) with alpha baked to 0.35, vacuum = purple burst (3,0), spark = blue burst (11,0) | 32 |
 | `garlic` | bluecarrot16 "[LPC] Food" v2 `fruits-veggies.png`, cell (23,15) (verified) — https://opengameart.org/content/lpc-food | 32 |
 | `chest` | LPC Base Assets `tiles/chests.png`, top-left 32×32 (already downloaded) | 32 |
 
