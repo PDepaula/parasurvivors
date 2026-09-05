@@ -184,10 +184,10 @@ The code is MIT. The art is not mine:
 - The bat, the grass tile and the chest are from the
   [LPC Base Assets](https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles)
   by Charles Sanchez and Lanea Zimmerman.
-- The pickup, passive and effect icons come from Tuomo Untinen's (reemax)
+- The pickup, passive, effect and boomerang icons come from Tuomo Untinen's (reemax)
   ["\[LPC\] Items and game effects"](https://opengameart.org/content/lpc-items-and-game-effects),
-  CC-BY-SA 3.0 / GPL (every contributor is named in `src/assets/CREDITS-lpc-items.txt`); the weapon
-  icons are single frames cut from the generator layers above.
+  CC-BY-SA 3.0 / GPL (every contributor is named in `src/assets/CREDITS-lpc-items.txt`); the spear,
+  arrow, axe and shield icons are single frames cut from the generator layers above.
 - The garlic is from bluecarrot16, Daniel Eddeland, Joshua Taylor and Richard Kettering's
   ["\[LPC\] Food"](https://opengameart.org/content/lpc-food), CC-BY-SA 3.0 / GPL 3.0 (contributors in
   `src/assets/CREDITS-lpc-food.txt`).
