@@ -7,21 +7,32 @@ proc keyCallback(window: GLFWWindow, key: int32, scancode: int32, action: int32,
   elif action == GLFW_RELEASE:
     onKeyRelease(key)
 
-var density: int
+var density = 1.0 ## framebuffer pixels per layout pixel (HiDPI screens, and the web's devicePixelRatio)
 
 proc frameSizeCallback(window: GLFWWindow, width: int32, height: int32) {.cdecl.} =
-  onWindowResize(width, height, int(width / density), int(height / density))
+  onWindowResize(width, height, int(float(width) / density), int(float(height) / density))
 
 var
   game: Game
   window: GLFWWindow
 
 when defined(emscripten):
+  {.emit: "#include <emscripten.h>".}
   proc emscripten_set_main_loop(f: proc() {.cdecl.}, fps: cint, simulateInfiniteLoop: bool) {.importc.}
   proc emscripten_get_canvas_element_size(target: cstring, width: ptr cint, height: ptr cint): cint {.importc.}
+  proc emscripten_get_element_css_size(target: cstring, width: ptr float64, height: ptr float64): cint {.importc.}
   # The browser resizes the canvas via CSS, not GLFW, so the framebuffer-size
   # callback never fires; poll the canvas each frame and forward real changes.
   var canvasWidth, canvasHeight: cint
+
+  # Entry points for the touch controls in shell_minimal.html, which call
+  # Module._psKeyDown(code) with the GLFW key codes from data.nim. KEEPALIVE
+  # exports them without an -s EXPORTED_FUNCTIONS list.
+  proc psKeyDown(key: cint) {.exportc, codegenDecl: "EMSCRIPTEN_KEEPALIVE $# $#$#".} =
+    onKeyPress(key.int)
+
+  proc psKeyUp(key: cint) {.exportc, codegenDecl: "EMSCRIPTEN_KEEPALIVE $# $#$#".} =
+    onKeyRelease(key.int)
 
 when defined(keyscript):
   # test aid: scripted input for screenshots/demos (nim c -d:keyscript ...).
@@ -65,6 +76,11 @@ proc mainLoop() {.cdecl.} =
         (width != canvasWidth or height != canvasHeight):
       canvasWidth = width
       canvasHeight = height
+      # The shell sizes the framebuffer at devicePixelRatio for sharpness, so divide
+      # it back out: the world is laid out in CSS pixels, not device ones.
+      var cssWidth, cssHeight: float64
+      if emscripten_get_element_css_size("#canvas", cssWidth.addr, cssHeight.addr) >= 0 and cssWidth > 0:
+        density = max(1.0, float(width) / cssWidth)
       window.frameSizeCallback(width, height)
     try:
       game.tick()
@@ -103,7 +119,7 @@ when isMainModule:
   var windowWidth, windowHeight: int32
   window.getWindowSize(windowWidth.addr, windowHeight.addr)
 
-  density = max(1, int(width / windowWidth))
+  density = max(1.0, float(width) / float(windowWidth))
   window.frameSizeCallback(width, height)
 
   game.init()

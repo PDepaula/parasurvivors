@@ -26,6 +26,10 @@ when defined(emscripten):
   --threads:off
 
   mkDir("web")
+  # Add-to-home-screen needs these next to index.html. Harmless if the browser skips
+  # them, and they are the one part -d:singlefile does not fold into the page.
+  for f in ["manifest.webmanifest", "icon-192.png", "icon-512.png"]:
+    cpFile("webshell/" & f, "web/" & f)
   # Emscripten's default 64 KB stack overflows inside the first running tick (the
   # pararules session code is deeply nested); match the 8 MB a Linux thread gets.
   # `-d:singlefile` base64-inlines the wasm into the html, so web/index.html is one

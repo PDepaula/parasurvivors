@@ -103,7 +103,8 @@ const
   maxEnemies* = 300
   maxPickups* = 400
   runLengthSecs* = 30 * 60
-  zoom* = 1.0 ## world units per screen pixel
+  zoom* = 1.0 ## world units per screen pixel, at or above the reference height
+  referenceHeight* = 768.0 ## the window height the game was balanced at
   playerBaseSpeed* = 160.0
   playerRadius* = 14.0
   pickupRadius* = 24.0
@@ -313,6 +314,14 @@ const
   ]
 
 # ---------------------------------------------------------------- atlas (assets/items.txt)
+
+proc zoomFor*(windowHeight: int): float =
+  ## World units per screen pixel for a window this tall. Phones are short, and at a
+  ## fixed zoom they would see half the world a desktop does -- enemies spawn just
+  ## offscreen, so that is a harder game, not a smaller one. Scaling by height keeps
+  ## the vertical field of view at referenceHeight. Never above `zoom`, so desktop
+  ## windows behave exactly as before.
+  max(0.4, min(zoom, float(windowHeight) / referenceHeight))
 
 proc spriteManifestName(s: Sprite): string =
   ## SprGemBlue -> "gemblue"
