@@ -1,7 +1,9 @@
 import paranim/opengl
 import paranim/gl
 import pararules
-import sets, random, times
+import sets, random
+when not defined(emscripten):
+  import times
 import data, systems, rules, render, audio
 
 type
@@ -29,6 +31,14 @@ proc onWindowResize*(windowWidth, windowHeight, worldWidth, worldHeight: int) =
   session.insert(Global, WindowHeight, windowHeight)
   session.insert(Global, WorldWidth, float(worldWidth) / zoom)
   session.insert(Global, WorldHeight, float(worldHeight) / zoom)
+
+when defined(emscripten):
+  # gettimeofday (what epochTime uses) is backed by Date.now() under emscripten, so it
+  # quantises to 1 ms and the overlay's sim time reads 0/1/2. performance.now() does not.
+  proc emscripten_get_now(): float64 {.importc.}
+  proc nowSecs(): float = emscripten_get_now() / 1000.0
+else:
+  proc nowSecs(): float = epochTime()
 
 proc init*(game: var Game) =
   doAssert glInit()
@@ -65,7 +75,7 @@ proc finishChoice(index: int) =
     session.insert(Global, Phase, Running)
 
 proc tick*(game: var Game) =
-  let tickStart = epochTime()
+  let tickStart = nowSecs()
   session.insert(Global, TotalTime, game.totalTime)
   let (phase) = session.query(gameRules.getPhase)
   let (just) = session.query(gameRules.getJustPressed)
@@ -130,10 +140,10 @@ proc tick*(game: var Game) =
   when defined(perf):
     let (tt, gameTime) = session.query(gameRules.getTime)
     if int(gameTime) mod 5 == 0 and game.deltaTime > 0:
-      let work = (epochTime() - tickStart) * 1000
+      let work = (nowSecs() - tickStart) * 1000
       echo "t=", clockText(gameTime), " dt=", game.deltaTime * 1000, "ms work=", work, "ms enemies=", session.query(gameRules.getTargeting).enemyCount
   session.insert(Global, JustPressed, initHashSet[int]())
   # Timed before drawFrame, so "sim" is the tick's own work, not the draw.
-  recordStats(game.deltaTime, epochTime() - tickStart,
+  recordStats(game.deltaTime, nowSecs() - tickStart,
               session.query(gameRules.getTargeting).enemyCount)
   drawFrame(game)
