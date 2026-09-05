@@ -123,7 +123,7 @@ ICON_NAMES=(); ICON_SIZES=(); CELLS=()
 # icon NAME MAGICK-ARGS... : the args must produce a single image (e.g. SHEET -crop WxH+X+Y +repage)
 icon() {
   local name=$1; shift
-  magick "$@" -trim +repage -resize '64x64>' "PNG32:$TMP/icon_$name.png"
+  magick "$@" -fuzz 20% -trim +repage -fuzz 0 -resize '64x64>' "PNG32:$TMP/icon_$name.png"
   ICON_NAMES+=("$name")
   ICON_SIZES+=("$(magick "$TMP/icon_$name.png" -format '%w %h' info:)")
   magick "$TMP/icon_$name.png" -gravity center -background none -extent 64x64 "PNG32:$TMP/cell_$name.png"
@@ -135,7 +135,7 @@ cell() { echo "$1 +repage -crop 32x32+$(( $2 * 32 ))+$(( $3 * 32 )) +repage"; }
 # weapons (right-facing rows of the generator sheets; row 3 = Right, row 2 = Down)
 icon spear "$(layer weapon/polearm/dragonspear/background/thrust/steel.png)" "$(layer weapon/polearm/dragonspear/foreground/thrust/steel.png)" \
   +repage -background none -layers flatten -crop 192x192+960+576 +repage
-icon bolt $(cell "$EFFECTS" 13 2)
+icon bolt $(cell "$EFFECTS" 10 0)
 icon arrow "$(layer weapon/ranged/bow/arrow/shoot/arrow.png)" +repage -crop 64x64+512+192 +repage
 icon axe "$(layer weapon/blunt/waraxe/behind/walk/waraxe.png)" "$(layer weapon/blunt/waraxe/walk/waraxe.png)" \
   +repage -background none -layers flatten -crop 64x64+64+192 +repage
@@ -143,7 +143,7 @@ icon boomerang $(cell "$ITEMS" 9 8)
 icon shield "$(layer shield/round/walk/brown.png)" +repage -crop 64x64+0+128 +repage
 icon garlic $(cell "$FOOD" 23 15)
 icon aura $(cell "$EFFECTS" 16 3) -channel A -evaluate multiply 0.35 +channel
-icon spark $(cell "$EFFECTS" 10 0)
+icon spark $(cell "$EFFECTS" 11 0)
 # pickups
 icon gemblue $(cell "$ITEMS" 12 4)
 icon gemgreen $(cell "$ITEMS" 12 5)

@@ -150,7 +150,7 @@ swapped (`walk` → `thrust`, `slash`, `shoot`, `spellcast`); all exist at the s
 | `boomerang` icon | Reemax items sheet cell (9,8) (green boomerang; simpler than cutting the 192 px throw sheet) | 32 |
 | `shield` icon | `shield/round/walk/brown.png` (576×256), down row (front view), frame 0, trimmed | |
 | gems, coin, chicken, passives | Reemax "[LPC] Items and game effects" `items1.png` (32 px cells, verified): coin (9,0), gem_red (12,3), gem_blue (12,4), gem_green (12,5), chicken (8,6), tome (0,9), potion_red (3,5), platemail (0,1), boots (13,3), leaf (8,4), apple (8,5), crystal orb (2,9) — https://opengameart.org/content/lpc-items-and-game-effects | 32 |
-| `bolt`, `aura`, `vacuum`, `spark` | same pack `effects.png` (verified): bolt = blue swirl orb (13,2), aura = blue ring (16,3) with alpha baked to 0.35, vacuum = purple burst (3,0), spark = blue sparkle (10,0) | 32 |
+| `bolt`, `aura`, `vacuum`, `spark` | same pack `effects.png` (verified): bolt = blue four-point sparkle (10,0), aura = blue ring (16,3) with alpha baked to 0.35, vacuum = purple burst (3,0), spark = blue burst (11,0) | 32 |
 | `garlic` | bluecarrot16 "[LPC] Food" v2 `fruits-veggies.png`, cell (23,15) (verified) — https://opengameart.org/content/lpc-food | 32 |
 | `chest` | LPC Base Assets `tiles/chests.png`, top-left 32×32 (already downloaded) | 32 |
 
@@ -167,7 +167,7 @@ CC-BY-SA 3.0 / GPL; Food CC-BY-SA 3.0 / GPL 3.0.
 3. Attack sheets `<name>_attack.png`: bodies/legs/torso/head/hair regridded 64 → 192 for Otto
    (thrust, 8×4) and Lina (slash, 6×4), flattened between the weapon bg and fg layers; Gino (shoot,
    13×4, 64 px, arrow layer on top) and Imma (spellcast, 7×4, 64 px) flatten at native size.
-4. Icons: crop frame, `-trim`, shrink with `-resize '64x64>'` if larger, centre in a 64×64 cell.
+4. Icons: crop frame, `-fuzz 20% -trim` (drops faint glows so rects hug the visible pixels), shrink with `-resize '64x64>'` if larger, centre in a 64×64 cell.
 5. `magick montage -mode concatenate -tile 8x -background none` of all cells in a fixed order into
    `src/assets/items.png`; the script writes `src/assets/items.txt` (`size W H` then one
    `name x y w h` per icon: the icon's *tight* rect inside its cell, from the trimmed size and the
