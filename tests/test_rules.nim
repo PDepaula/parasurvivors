@@ -125,19 +125,61 @@ suite "rules: weapons and projectiles":
     let b = s.query(gameRules.getProjectiles, id = shields[0].id)
     check abs(dist(b.pos.x, b.pos.y, 500.0, 0.0) - orbitRadius) < 1e-6
 
-  test "boomerang bounces inside the view":
+  test "boomerang turns around, forgets its hits and is caught":
     var s = newSession()
     s.startRun(Otto)
     s.addWeapon(Boomerang)
     s.step(0.25)
-    let r = s.queryAll(gameRules.getProjectiles).filterIt(it.kind == Boomerang)[0]
-    s.insert(r.id, Pos, (0.0, 0.0))
-    s.insert(r.id, VX, -1000.0)
-    s.insert(r.id, VY, 0.0)
-    s.step(1.0)
-    let after = s.query(gameRules.getProjectiles, id = r.id)
-    check after.vx > 0
-    check after.pos.x >= -1024.0 / 2 / zoom
+    let b = s.queryAll(gameRules.getProjectiles).filterIt(it.kind == Boomerang)[0]
+    s.insert(b.id, Pos, (10.0, 0.0))   # already 10 px out (at the player the pull is zero)
+    s.insert(b.id, VX, 100.0)
+    s.insert(b.id, VY, 0.0)
+    s.insert(b.id, HitIds, toHashSet([42]))
+    s.step(0.1)
+    var p = s.query(gameRules.getProjectiles, id = b.id)
+    check p.pos.x > 10.0
+    check p.vx < 100.0                 # pulled back toward the player
+    check p.hitIds.contains(42)        # still outbound: hits kept
+    s.insert(b.id, VX, -100.0)         # now heading home
+    s.step(0.1)
+    p = s.query(gameRules.getProjectiles, id = b.id)
+    check p.hitIds.len == 0            # turned: can hit the same enemies again
+    s.insert(b.id, Pos, (5.0, 0.0))
+    s.step(0.1)
+    check s.query(gameRules.getProjectiles, id = b.id).ttl <= 0   # caught → expires
+
+  test "the starter weapon plays the body animation and holds its first lunge":
+    var s = newSession()
+    s.startRun(Otto)                 # Dragon Spear → AnimThrust
+    s.addWeapon(ArcaneStaff)
+    var p = s.query(gameRules.getPlayer)
+    check p.anim == NoAnim
+    s.step(0.25)
+    p = s.query(gameRules.getPlayer)
+    check p.anim == AnimThrust
+    check abs(p.animStart - 0.25) < 1e-9
+    let projs = s.queryAll(gameRules.getProjectiles)
+    check projs.filterIt(it.kind == DragonSpear and it.held).len == 1
+    check projs.filterIt(it.kind == ArcaneStaff and it.held).len == 0
+    check animActive(p.anim, p.animStart, 0.5)
+    check not animActive(p.anim, p.animStart, 0.25 + animDefs[AnimThrust].secs)
+
+  test "a non-starter weapon never animates the body":
+    var s = newSession()
+    s.startRun(Imma)                 # Arcane Staff → AnimCast
+    s.addWeapon(DragonSpear)
+    s.step(0.25)
+    let p = s.query(gameRules.getPlayer)
+    check p.anim == AnimCast
+    check s.queryAll(gameRules.getProjectiles).filterIt(it.kind == DragonSpear and it.held).len == 0
+
+  test "war axe keeps its angle fact still; render spins it":
+    var s = newSession()
+    s.startRun(Lina)
+    s.step(0.25)
+    let a = s.queryAll(gameRules.getProjectiles)[0]
+    s.step(0.1)
+    check s.query(gameRules.getProjectiles, id = a.id).angle == a.angle
 
   test "insert/retract projectile round trip":
     var s = newSession()
@@ -146,6 +188,7 @@ suite "rules: weapons and projectiles":
     check s.queryAll(gameRules.getProjectiles).len == 1
     s.retractProjectile(id)
     check s.queryAll(gameRules.getProjectiles).len == 0
+    check not s.contains(id, Held)
 
 suite "rules: enemies, waves, pickups":
   test "enemies walk toward the player":

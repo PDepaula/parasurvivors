@@ -26,7 +26,7 @@ type
     SpawnTimer, EnemyCount, BossesSpawned, NearestX, NearestY, HasNearest,
     # shared entity attrs
     Hero, Pos, Facing, Moving, Hp, MaxHp, Speed, Damage, Size,
-    Xp, Level, XpToNext, Gold, Kills, PlayerStats,
+    Xp, Level, XpToNext, Gold, Kills, PlayerStats, Anim, AnimStart,
     # weapon slots
     Weapon, WeaponLevel, Cooldown,
     # passive slots
@@ -34,7 +34,7 @@ type
     # enemies
     Enemy, HitFlash,
     # projectiles
-    Proj, VX, VY, Ttl, Pierce, HitIds, Angle,
+    Proj, VX, VY, Ttl, Pierce, HitIds, Angle, Held, Turned,
     # pickups
     Pickup, Value, Magnetized
   PhaseKind* = enum
@@ -78,6 +78,8 @@ schema Fact(Id, Attr):
   Gold: int
   Kills: int
   PlayerStats: Stats
+  Anim: BodyAnim
+  AnimStart: float
   Weapon: WeaponKind
   WeaponLevel: int
   Cooldown: float
@@ -92,6 +94,8 @@ schema Fact(Id, Attr):
   Pierce: int
   HitIds: IntSet
   Angle: float
+  Held: bool
+  Turned: bool
   Pickup: PickupKind
   Value: int
   Magnetized: bool
@@ -155,9 +159,11 @@ proc insertProjectile*[S](session: var S, spec: ProjSpec): int =
   session.insert(result, Angle, spec.angle)
   session.insert(result, Size, spec.size)
   session.insert(result, Damage, spec.damage)
+  session.insert(result, Held, spec.held)
+  session.insert(result, Turned, false)
 
 proc retractProjectile*[S](session: var S, id: int) =
-  for a in [Proj, Pos, VX, VY, Ttl, Pierce, HitIds, Angle, Size, Damage]:
+  for a in [Proj, Pos, VX, VY, Ttl, Pierce, HitIds, Angle, Size, Damage, Held, Turned]:
     session.retract(id, a)
 
 # ---------------------------------------------------------------- rules
@@ -211,6 +217,8 @@ let (initSession, rulesInternal) =
         (Player, XpToNext, xpToNext)
         (Player, Gold, gold)
         (Player, Kills, kills)
+        (Player, Anim, anim)
+        (Player, AnimStart, animStart)
     rule getStats(Fact):
       what:
         (Player, PlayerStats, stats)
@@ -244,6 +252,7 @@ let (initSession, rulesInternal) =
         (id, Angle, angle)
         (id, Size, size)
         (id, Damage, damage)
+        (id, Held, held)
     rule getPickups(Fact):
       what:
         (id, Pos, pos)
@@ -302,8 +311,10 @@ let (initSession, rulesInternal) =
         (Global, HasNearest, hasNearest, then = false)
         (Global, NearestX, nx, then = false)
         (Global, NearestY, ny, then = false)
+        (Global, TotalTime, tt, then = false)
         (Player, Pos, ppos, then = false)
         (Player, Facing, facing, then = false)
+        (Player, Hero, hero, then = false)
         (Player, PlayerStats, st, then = false)
         (Global, DeltaTime, dt)
       then:
@@ -311,8 +322,12 @@ let (initSession, rulesInternal) =
         if cd2 > 0:
           session.insert(id, Cooldown, cd2)
         else:
-          for spec in attackPlan(kind, level, st, ppos.x, ppos.y, facing, hasNearest, nx, ny):
+          let starter = kind == characterDefs[hero].weapon
+          for spec in attackPlan(kind, level, st, ppos.x, ppos.y, facing, hasNearest, nx, ny, starter):
             discard session.insertProjectile(spec)
+          if starter and weaponDefs[kind].anim != NoAnim:
+            session.insert(Player, Anim, weaponDefs[kind].anim)
+            session.insert(Player, AnimStart, tt)
           session.insert(id, Cooldown, weaponAt(kind, level).cooldown * st.cooldownMul)
 
     rule moveProjectiles(Fact):
@@ -323,52 +338,42 @@ let (initSession, rulesInternal) =
         (id, VY, vy, then = false)
         (id, Ttl, ttl, then = false)
         (id, Angle, angle, then = false)
-        (Global, WorldWidth, ww, then = false)
-        (Global, WorldHeight, wh, then = false)
+        (id, Turned, turned, then = false)
         (Player, Pos, ppos, then = false)
         (Global, DeltaTime, dt)
       then:
         session.insert(id, Ttl, ttl - dt)
-        case kind
-        of DragonSpear:
+        case weaponDefs[kind].motion
+        of Lunge:
           discard # stays where it was spawned
-        of Garlic:
+        of Aura:
           session.insert(id, Pos, ppos)
-        of RoundShield:
+        of Orbit:
           # vx = angular speed, vy = orbit radius (see systems.attackPlan)
           let a = angle + vx * dt
           session.insert(id, Angle, a)
           session.insert(id, Pos, (ppos.x + cos(a) * vy, ppos.y + sin(a) * vy))
-        of WarAxe:
+        of Arc:
           let vy2 = vy + axeGravity * dt
           session.insert(id, VY, vy2)
           session.insert(id, Pos, (pos.x + vx * dt, pos.y + vy2 * dt))
-          session.insert(id, Angle, angle + 10 * dt)
-        of Boomerang:
-          var nx = pos.x + vx * dt
-          var ny = pos.y + vy * dt
-          var nvx = vx
-          var nvy = vy
-          let left = ppos.x - ww / 2
-          let right = ppos.x + ww / 2
-          let top = ppos.y - wh / 2
-          let bottom = ppos.y + wh / 2
-          if nx < left:
-            nx = left
-            nvx = abs(vx)
-          elif nx > right:
-            nx = right
-            nvx = -abs(vx)
-          if ny < top:
-            ny = top
-            nvy = abs(vy)
-          elif ny > bottom:
-            ny = bottom
-            nvy = -abs(vy)
-          session.insert(id, Pos, (nx, ny))
+        of Return:
+          # constant pull toward the player: flies out, slows, comes back even if the player moved
+          let tx = ppos.x - pos.x
+          let ty = ppos.y - pos.y
+          let d = max(1e-6, sqrt(tx * tx + ty * ty))
+          let nvx = vx + tx / d * boomerangAccel * dt
+          let nvy = vy + ty / d * boomerangAccel * dt
           session.insert(id, VX, nvx)
           session.insert(id, VY, nvy)
-        of ArcaneStaff, Longbow:
+          session.insert(id, Pos, (pos.x + nvx * dt, pos.y + nvy * dt))
+          let homing = nvx * tx + nvy * ty > 0
+          if not turned and homing:
+            session.insert(id, Turned, true)
+            session.insert(id, HitIds, initHashSet[int]()) # may hit the same enemies on the way back
+          elif turned and d < boomerangCatchRadius:
+            session.insert(id, Ttl, 0.0) # caught; stepSystems retracts expired projectiles
+        of Homing, Straight:
           session.insert(id, Pos, (pos.x + vx * dt, pos.y + vy * dt))
 
     rule moveEnemies(Fact):
@@ -569,6 +574,8 @@ proc startRun*(session: var Session[Fact, FactMatch], hero: CharacterKind) =
   session.insert(Player, Gold, 0)
   session.insert(Player, Kills, 0)
   session.insert(Player, PlayerStats, c.base)
+  session.insert(Player, Anim, NoAnim)
+  session.insert(Player, AnimStart, 0.0)
   session.addWeapon(c.weapon)
   session.insert(Global, GameTime, 0.0)
   session.insert(Global, SpawnTimer, 0.0)
