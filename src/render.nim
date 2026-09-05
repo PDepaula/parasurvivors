@@ -153,6 +153,17 @@ proc addIcon*(spr: Sprite, cx, cy, w: float, angle = 0.0) =
   e.scale(w, h)
   items.batch.add(e)
 
+proc addIconFit*(spr: Sprite, cx, cy, box: float) =
+  ## UI icon fitted inside a box×box square. Long thin icons (spear, arrow) lie on a
+  ## diagonal like an inventory slot instead of shrinking to a dash.
+  let r = atlas[spr]
+  if r.w > 2 * r.h:
+    addIcon(spr, cx, cy, box * 1.25, -PI / 4)
+  elif r.w >= r.h:
+    addIcon(spr, cx, cy, box)
+  else:
+    addIcon(spr, cx, cy, box * float(r.w) / float(r.h))
+
 proc flushItems[G](game: G, ww, wh: float, camera: Mat3x3[GLfloat], useCamera: bool) =
   if items.batch.attributes.a_matrix.data[].len == 0:
     return
@@ -305,12 +316,12 @@ proc drawHud[G](game: G, ww, wh, gameTime: float) =
   drawText(game, "Kills " & $player.kills & "   Gold " & $player.gold, 10, 24, ww, wh, yellow)
   var y = wh - 30
   for w in session.queryAll(gameRules.getWeapons):
-    addIcon(weaponDefs[w.kind].sprite, 22, y + 12, 24)
+    addIconFit(weaponDefs[w.kind].sprite, 22, y + 12, 24)
     drawText(game, $w.level, 40, y, ww, wh, white, 0.8)
     y -= 30
   y = wh - 30
   for p in session.queryAll(gameRules.getPassives):
-    addIcon(passiveDefs[p.kind].sprite, 212, y + 12, 24)
+    addIconFit(passiveDefs[p.kind].sprite, 212, y + 12, 24)
     drawText(game, $p.level, 230, y, ww, wh, white, 0.8)
     y -= 30
   flushItems(game, ww, wh, noCam, false)
@@ -329,10 +340,10 @@ proc drawLevelUp[G](game: G, ww, wh: float) =
     let y = wh / 2 - 70 + float(i) * 70
     let marker = if i == m.selected: "> " else: "  "
     case c.kind
-    of NewWeapon, UpgradeWeapon: addIcon(weaponDefs[c.weapon].sprite, ww / 2 - 240, y + 20, 48)
-    of NewPassive, UpgradePassive: addIcon(passiveDefs[c.passive].sprite, ww / 2 - 240, y + 20, 48)
-    of BonusGold: addIcon(SprCoin, ww / 2 - 240, y + 20, 48)
-    of BonusHeal: addIcon(SprChicken, ww / 2 - 240, y + 20, 48)
+    of NewWeapon, UpgradeWeapon: addIconFit(weaponDefs[c.weapon].sprite, ww / 2 - 240, y + 20, 48)
+    of NewPassive, UpgradePassive: addIconFit(passiveDefs[c.passive].sprite, ww / 2 - 240, y + 20, 48)
+    of BonusGold: addIconFit(SprCoin, ww / 2 - 240, y + 20, 48)
+    of BonusHeal: addIconFit(SprChicken, ww / 2 - 240, y + 20, 48)
     drawText(game, marker & c.title, ww / 2 - 200, y, ww, wh, if i == m.selected: yellow else: white)
     drawText(game, c.desc, ww / 2 - 170, y + 26, ww, wh, white, 0.8)
   flushItems(game, ww, wh, mat3f(1), false)

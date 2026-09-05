@@ -116,7 +116,7 @@ proc pickupSprite*(kind: PickupKind): Sprite
 - Manifest names are the enum names without `Spr`, lower-cased (`spear`, `gemblue`, `emptytome`).
   A name missing from the manifest is a compile-time error. First manifest line is `size W H`.
 - `drawScale` multiplies the projectile `size` for the icon width (spear 1.0 → icon length = hitbox
-  length; bolt 2.4; arrow 3.5; axe 1.4; boomerang 1.6; shield 1.6; aura 2.0 → ring diameter).
+  length; bolt 3.5; arrow 5.0; axe 1.4; boomerang 1.6; shield 1.6; aura 2.0 → ring diameter).
 - Passive icons: Spinach→leaf, Armor→platemail, HollowHeart→red potion, Pummarola→apple,
   EmptyTome→tome, Wings→boots, Attractorb→orb.
 - `characterDefs`: Otto DragonSpear, Imma ArcaneStaff, Lina WarAxe, Gino Longbow; names, HP and
@@ -183,6 +183,8 @@ CC-BY-SA 3.0 / GPL; Food CC-BY-SA 3.0 / GPL 3.0.
 - `items.png` is one more sheet; `addIcon(spr: Sprite, cx, cy, w: float, angle = 0.0)` crops the
   atlas rect, derives the height from the rect's aspect, and applies translate → rotate → scale.
   No alpha/flip: instanced image batches have no per-instance colour, and rotation covers direction.
+- `addIconFit(spr, cx, cy, box)` fits an icon in a square for the HUD and level-up cards; icons
+  wider than 2:1 lie on a 45° diagonal.
 - Projectiles: §4 single path. Lunge spear: icon length `size`, rotated to `angle`, centred on the
   hitbox. Aura: ring sprite scaled to `2r` at alpha 0.35, `garlic` 20 px above the head.
 - Pickups: gems 16 px with a 3 px bob (`sin(tt·4 + id)`), coin 18, chicken 22, chest 28, vacuum 20
