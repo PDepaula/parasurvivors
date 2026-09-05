@@ -1,0 +1,24 @@
+size 512 192
+spear 0 27 64 9
+bolt 85 22 22 20
+arrow 144 29 31 5
+axe 201 20 46 23
+boomerang 275 23 26 18
+shield 344 18 16 27
+garlic 408 21 15 22
+aura 465 17 30 29
+spark 16 81 31 29
+gemblue 89 82 14 27
+gemgreen 153 82 14 27
+gemred 217 82 14 27
+coin 274 87 27 17
+chicken 340 89 23 13
+chest 401 80 30 32
+vacuum 465 81 30 30
+spinach 25 151 14 17
+armor 81 150 30 19
+hollowheart 156 153 8 14
+pummarola 220 155 8 9
+emptytome 277 148 21 23
+wings 338 150 28 19
+attractorb 408 150 16 20
