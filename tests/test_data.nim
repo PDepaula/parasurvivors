@@ -38,7 +38,7 @@ suite "data":
     for lvl in 1 .. maxWeaponLevel:
       let w = weaponAt(Boomerang, lvl)
       for projSpeed in [1.0, 1.2]:
-        check 2 * w.speed * projSpeed / boomerangAccel <= w.ttl
+        check 2 * w.speed * projSpeed / boomerangAccel <= w.ttl * 0.9 # slack for a retreating player
 
   test "passives change stats":
     let none = computeStats(Otto, [])

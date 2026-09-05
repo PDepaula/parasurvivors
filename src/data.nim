@@ -240,12 +240,12 @@ const
       6: WeaponUpgrade(damage: 20, text: "Base damage up by 20"),
       7: WeaponUpgrade(pierce: 2, text: "Passes through 2 more enemies"),
       8: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile")],
-    Boomerang: [
-      2: WeaponUpgrade(speed: 50, damage: 5, text: "Speed +50, damage +5"),
-      3: WeaponUpgrade(ttl: 0.5, text: "Lasts 0.5s longer"),
+    Boomerang: [ # ttl bumps come before the speed bumps they pay for (see test_data)
+      2: WeaponUpgrade(ttl: 0.5, text: "Lasts 0.5s longer"),
+      3: WeaponUpgrade(speed: 50, damage: 5, text: "Speed +50, damage +5"),
       4: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
-      5: WeaponUpgrade(speed: 50, damage: 5, text: "Speed +50, damage +5"),
-      6: WeaponUpgrade(ttl: 0.3, text: "Lasts 0.3s longer"),
+      5: WeaponUpgrade(ttl: 0.3, text: "Lasts 0.3s longer"),
+      6: WeaponUpgrade(speed: 50, damage: 5, text: "Speed +50, damage +5"),
       7: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
       8: WeaponUpgrade(damage: 5, ttl: 0.3, text: "Damage +5, lasts 0.3s longer")],
     Garlic: [
