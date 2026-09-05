@@ -6,7 +6,7 @@ weapons fire on their own while the waves get bigger. Survive 30 minutes and the
 
 ![Mid-run: several weapons firing into a crowd](docs/screenshots/mid-game.png)
 
-The whole game is about 2000 lines of Nim. All game state lives in a
+The whole game is about 2200 lines of Nim. All game state lives in a
 [pararules](https://github.com/paranim/pararules) session as `(id, attribute, value)` facts, and every
 sound effect is a MIDI phrase rendered at startup, so the repository has no audio files at all.
 
@@ -52,10 +52,13 @@ small permanent perk.
 
 | Survivor | Starting weapon | Perk | HP |
 |---|---|---|---|
-| Otto | Whip | +10% might | 120 |
-| Imma | Magic Wand | -10% cooldown | 100 |
-| Lina | Runetracer | +20% projectile speed | 90 |
-| Gino | Knife | +1 projectile | 100 |
+| Otto | Dragon Spear | +10% might | 120 |
+| Imma | Arcane Staff | -10% cooldown | 100 |
+| Lina | War Axe | +20% projectile speed | 90 |
+| Gino | Longbow | +1 projectile | 100 |
+
+Each survivor carries their starting weapon and swings, draws or casts it every time it fires. Weapons
+picked up later fire on their own without a body animation.
 
 The first minute is bats. Kill them, pick up the blue gems they drop, and watch the XP bar at the top.
 
@@ -68,13 +71,13 @@ you own, or a passive item. Six weapon slots, six passive slots, eight levels pe
 
 | Weapon | Behaviour |
 |---|---|
-| Whip | horizontal slash in front of you, passes through everything |
-| Magic Wand | homes in on the nearest enemy |
-| Knife | fast projectile in the direction you face |
-| Axe | high damage, arcs up and falls back down |
-| Runetracer | bounces off the screen edges, passes through enemies |
+| Dragon Spear | lunges in the direction you face, passes through everything |
+| Arcane Staff | homes in on the nearest enemy |
+| Longbow | arrows fly in the direction you face |
+| War Axe | high damage, arcs up and falls back down |
+| Boomerang | flies out, curves back to you, hits on both legs |
 | Garlic | damages everything within a ring around you |
-| King Bible | books orbit around you |
+| Round Shield | shields orbit around you |
 
 | Passive | Per level |
 |---|---|
@@ -95,7 +98,7 @@ Koala at 8, 15 and 25, and the Reaper at 30. Bosses drop a chest that levels a w
 ![Late waves](docs/screenshots/late-game.png)
 
 Past minute 30 the Reaper shows up: 65535 HP, faster than you, and it deals 999 damage on touch.
-This run is the immortal `-d:autoplay` test build, which is the only reason it is still going at 32:24.
+This run is the immortal `-d:autoplay` test build, which is the only reason it is still going at 36:03.
 
 ![The Reaper](docs/screenshots/reaper.png)
 
@@ -147,6 +150,19 @@ cd tests && nim c -r -d:release --hints:off --outdir:../tmp bench.nim   # one ti
 
 The design and the implementation plan the code was built from are in `docs/superpowers/`.
 
+### Adding a weapon
+
+Everything a weapon needs is data. To add one:
+
+1. `src/data.nim`: add the value to `WeaponKind`, a `weaponDefs` row (pick a `motion`, a `sprite`,
+   `drawScale`, `spin`; `anim` only matters if a survivor starts with it) and a `weaponUpgrades` row
+   for levels 2-8.
+2. If it needs new art: add an `icon NAME ...` line to `tools/fetch_assets.sh`, a `SprNAME` value to
+   `Sprite`, run `nimble assets`. A sprite missing from `items.txt` fails to compile.
+3. A new movement style is a new `Motion` value with a branch in `systems.attackPlan` (spawn) and
+   `rules.moveProjectiles` (per tick), plus a test in `tests/test_systems.nim`.
+4. `nimble test`, then `tools/screenshots.sh` to look at it.
+
 ### Performance notes
 
 Every entity keeps a single `Pos` fact and every per-entity rule lists `(id, Pos, pos)` first and
@@ -163,9 +179,18 @@ The code is MIT. The art is not mine:
   [Universal LPC Spritesheet Generator](https://github.com/liberatedpixelcup/Universal-LPC-Spritesheet-Character-Generator),
   CC-BY-SA 3.0 (each layer's authors, licenses and source pages are listed per file in
   `src/assets/CREDITS-lpc.csv`).
-- The bat and the grass tile are from the
+  The weapons the survivors hold and swing (dragon spear, staff, bow and arrow, war axe, round shield)
+  are generator layers too.
+- The bat, the grass tile and the chest are from the
   [LPC Base Assets](https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles)
   by Charles Sanchez and Lanea Zimmerman.
+- The pickup, passive and effect icons come from Tuomo Untinen's (reemax)
+  ["\[LPC\] Items and game effects"](https://opengameart.org/content/lpc-items-and-game-effects),
+  CC-BY-SA 3.0 / GPL (every contributor is named in `src/assets/CREDITS-lpc-items.txt`); the weapon
+  icons are single frames cut from the generator layers above.
+- The garlic is from bluecarrot16, Daniel Eddeland, Joshua Taylor and Richard Kettering's
+  ["\[LPC\] Food"](https://opengameart.org/content/lpc-food), CC-BY-SA 3.0 / GPL 3.0 (contributors in
+  `src/assets/CREDITS-lpc-food.txt`).
 - The koala boss is the Super Koalio sprite from the [libgdx](https://github.com/libgdx/libgdx) tests
   (Apache 2.0); the parakeet boss is from Zach Oakes' [parakeet](https://github.com/paranim/parakeet) demo.
 - Roboto is Google's, Apache 2.0. Instrument samples are
