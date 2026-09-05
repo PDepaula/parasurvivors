@@ -24,6 +24,7 @@ const
     for id in SheetId:
       a[id] = staticRead("assets/" & sheetDefs[id].file)
     a
+  itemsPng = staticRead("assets/items.png")
   grassPng = staticRead("assets/grass.png")
   ttf = staticRead("assets/Roboto-Regular.ttf")
 
@@ -35,6 +36,7 @@ type
 
 var
   sheets: array[SheetId, Sheet]
+  items: Sheet
   shapeBase: UncompiledTwoDEntity
   shapes: InstancedTwoDEntity
   ground: InstancedImageEntity
@@ -59,6 +61,9 @@ proc initRender*[G](game: var G) =
     let base = loadImage(sheetPng[id])
     sheets[id] = Sheet(frameW: sheetDefs[id].cellW, frameH: sheetDefs[id].cellH, base: base,
                        batch: compile(game, initInstancedEntity(base)))
+  block:
+    let base = loadImage(itemsPng)
+    items = Sheet(frameW: 1, frameH: 1, base: base, batch: compile(game, initInstancedEntity(base)))
   shapeBase = initTwoDEntity(primitives.rectangle[GLfloat]())
   shapes = compile(game, initInstancedEntity(shapeBase))
   block:
@@ -136,6 +141,28 @@ proc flushShapes[G](game: G, ww, wh: float, camera: Mat3x3[GLfloat], useCamera: 
   render(game, s)
   shapes.clear()
 
+proc addIcon*(spr: Sprite, cx, cy, w: float, angle = 0.0) =
+  ## Atlas icon centred at (cx, cy), `w` wide, height from the icon's own aspect.
+  let r = atlas[spr]
+  let h = w * float(r.h) / float(r.w)
+  var e = items.base
+  e.crop(float(r.x), float(r.y), float(r.w), float(r.h))
+  e.translate(cx, cy)
+  e.rotate(angle)
+  e.translate(-w / 2, -h / 2)
+  e.scale(w, h)
+  items.batch.add(e)
+
+proc flushItems[G](game: G, ww, wh: float, camera: Mat3x3[GLfloat], useCamera: bool) =
+  if items.batch.attributes.a_matrix.data[].len == 0:
+    return
+  var b = items.batch
+  b.project(ww, wh)
+  if useCamera:
+    b.invert(camera)
+  render(game, b)
+  items.batch.clear()
+
 proc textWidth*(s: string, scale = 1.0): float =
   for ch in s:
     let idx = int(ch) - font.firstChar
@@ -182,26 +209,6 @@ proc drawGround[G](game: G, ww, wh: float, camera: Mat3x3[GLfloat], px, py: floa
               floor((py - wh / 2) / tileSize) * tileSize - tileSize)
   render(game, g)
 
-proc pickupColor(kind: PickupKind): Vec4[GLfloat] =
-  case kind
-  of GemBlue: vec4(0.3f, 0.6f, 1f, 1f)
-  of GemGreen: vec4(0.3f, 1f, 0.4f, 1f)
-  of GemRed: vec4(1f, 0.3f, 0.3f, 1f)
-  of Chicken: vec4(1f, 0.75f, 0.4f, 1f)
-  of Coin: vec4(1f, 0.85f, 0.1f, 1f)
-  of Chest: vec4(0.6f, 0.35f, 0.1f, 1f)
-  of Vacuum: vec4(0.8f, 0.3f, 1f, 1f)
-
-proc projColor(kind: WeaponKind): Vec4[GLfloat] =
-  case kind
-  of DragonSpear: vec4(1f, 1f, 1f, 0.7f)
-  of ArcaneStaff: vec4(0.5f, 0.7f, 1f, 1f)
-  of Longbow: vec4(0.85f, 0.85f, 0.9f, 1f)
-  of WarAxe: vec4(0.7f, 0.5f, 0.3f, 1f)
-  of Boomerang: vec4(0.4f, 1f, 0.6f, 1f)
-  of Garlic: vec4(1f, 1f, 0.8f, 0.25f)
-  of RoundShield: vec4(0.9f, 0.8f, 0.5f, 1f)
-
 proc drawWorld[G](game: G, ww, wh, tt: float) =
   let player = session.query(gameRules.getPlayer)
   var camera = mat3f(1)
@@ -213,24 +220,25 @@ proc drawWorld[G](game: G, ww, wh, tt: float) =
 
   drawGround(game, ww, wh, camera, player.pos.x, player.pos.y)
 
-  # pickups
+  # pickups (icons), then the garlic aura ring: both under the sprites
   for p in session.queryAll(gameRules.getPickups):
     if p.pos.x < minX or p.pos.x > maxX or p.pos.y < minY or p.pos.y > maxY:
       continue
     case p.kind
     of GemBlue, GemGreen, GemRed:
-      addRect(p.pos.x, p.pos.y, 10, 10, PI / 4, pickupColor(p.kind))
-    of Chest:
-      addRect(p.pos.x, p.pos.y, 28, 20, 0, pickupColor(p.kind))
-    else:
-      addRect(p.pos.x, p.pos.y, 16, 16, 0, pickupColor(p.kind))
-  # garlic aura (drawn as two rotated squares)
+      addIcon(pickupSprite(p.kind), p.pos.x, p.pos.y + 3 * sin(tt * 4 + float(p.id)), 16)
+    of Coin: addIcon(SprCoin, p.pos.x, p.pos.y, 18)
+    of Chicken: addIcon(SprChicken, p.pos.x, p.pos.y, 22)
+    of Chest: addIcon(SprChest, p.pos.x, p.pos.y, 28)
+    of Vacuum: addIcon(SprVacuum, p.pos.x, p.pos.y, 20, tt * 3)
+  let stats = session.query(gameRules.getStats).stats
+  var hasGarlic = false
   for w in session.queryAll(gameRules.getWeapons):
-    if w.kind == Garlic:
-      let r = weaponAt(Garlic, w.level).size * session.query(gameRules.getStats).stats.area
-      addRect(player.pos.x, player.pos.y, r * 2, r * 2, 0, projColor(Garlic))
-      addRect(player.pos.x, player.pos.y, r * 2, r * 2, PI / 4, projColor(Garlic))
-  flushShapes(game, ww, wh, camera, true)
+    if weaponDefs[w.kind].motion == Aura:
+      hasGarlic = true
+      let r = weaponAt(w.kind, w.level).size * stats.area
+      addIcon(weaponDefs[w.kind].sprite, player.pos.x, player.pos.y, r * weaponDefs[w.kind].drawScale)
+  flushItems(game, ww, wh, camera, true)
 
   # enemies
   let enemies = session.queryAll(gameRules.getEnemies)
@@ -253,29 +261,32 @@ proc drawWorld[G](game: G, ww, wh, tt: float) =
       addSprite(d.sheet, phase mod 3, 0, e.pos.x, e.pos.y, w, h, flip = dx < 0)
     else:
       addSprite(d.sheet, 1 + phase mod 8, dirRow(dx, dy), e.pos.x, e.pos.y, w, h)
-  # player
+  # player: attack sheet while the starter weapon's animation runs, else the walk sheet
   block:
-    let sheet = characterDefs[player.hero].sheet
-    let col = if player.moving: 1 + int(tt / frameSecs) mod 8 else: 0
-    addSprite(sheet, col, player.facing.ord, player.pos.x, player.pos.y, 64, 64)
+    let c = characterDefs[player.hero]
+    if animActive(player.anim, player.animStart, tt):
+      let cell = float(sheetDefs[c.attackSheet].cellW)
+      addSprite(c.attackSheet, animFrame(player.anim, player.animStart, tt), player.facing.ord,
+                player.pos.x, player.pos.y, cell, cell)
+    else:
+      let col = if player.moving: 1 + int(tt / frameSecs) mod 8 else: 0
+      addSprite(c.sheet, col, player.facing.ord, player.pos.x, player.pos.y, 64, 64)
   flushSprites(game, ww, wh, camera)
 
-  # projectiles and hit flashes
+  # projectiles, garlic bulb, hit sparks: icons over the sprites
   for p in session.queryAll(gameRules.getProjectiles):
-    case p.kind
-    of DragonSpear:
-      addRect(p.pos.x, p.pos.y, p.size, 12, 0, projColor(DragonSpear))
-    of Longbow:
-      addRect(p.pos.x, p.pos.y, 22, 6, p.angle, projColor(Longbow))
-    of WarAxe:
-      addRect(p.pos.x, p.pos.y, p.size * 1.4, p.size * 1.4, p.angle, projColor(WarAxe))
-    of Garlic:
-      discard
-    else:
-      addRect(p.pos.x, p.pos.y, p.size * 1.6, p.size * 1.6, p.angle, projColor(p.kind))
+    let d = weaponDefs[p.kind]
+    if d.motion == Aura or p.held:
+      continue
+    addIcon(d.sprite, p.pos.x, p.pos.y, p.size * d.drawScale, p.angle + tt * d.spin)
+  if hasGarlic:
+    addIcon(SprGarlic, player.pos.x, player.pos.y - 44, 20)
   for e in enemies:
     if e.hitFlash > 0 and e.pos.x >= minX and e.pos.x <= maxX and e.pos.y >= minY and e.pos.y <= maxY:
-      addRect(e.pos.x, e.pos.y, e.size * 0.6, e.size * 0.6, 0, vec4(1f, 1f, 1f, 0.6f))
+      # instanced images have no per-instance alpha, so the spark shrinks instead of fading
+      addIcon(SprSpark, e.pos.x, e.pos.y, 24 * e.hitFlash / hitFlashSecs)
+  flushItems(game, ww, wh, camera, true)
+
   # hp bar under the player
   addRect(player.pos.x, player.pos.y + 38, 40, 6, 0, vec4(0.3f, 0f, 0f, 0.9f))
   let hpFrac = max(0.0, player.hp / player.maxHp)
@@ -294,12 +305,15 @@ proc drawHud[G](game: G, ww, wh, gameTime: float) =
   drawText(game, "Kills " & $player.kills & "   Gold " & $player.gold, 10, 24, ww, wh, yellow)
   var y = wh - 30
   for w in session.queryAll(gameRules.getWeapons):
-    drawText(game, weaponDefs[w.kind].name & " " & $w.level, 10, y, ww, wh, white, 0.8)
-    y -= 22
+    addIcon(weaponDefs[w.kind].sprite, 22, y + 12, 24)
+    drawText(game, $w.level, 40, y, ww, wh, white, 0.8)
+    y -= 30
   y = wh - 30
   for p in session.queryAll(gameRules.getPassives):
-    drawText(game, passiveDefs[p.kind].name & " " & $p.level, 200, y, ww, wh, white, 0.8)
-    y -= 22
+    addIcon(passiveDefs[p.kind].sprite, 212, y + 12, 24)
+    drawText(game, $p.level, 230, y, ww, wh, white, 0.8)
+    y -= 30
+  flushItems(game, ww, wh, noCam, false)
 
 proc drawOverlay[G](game: G, ww, wh: float, alpha = 0.7f) =
   addRect(ww / 2, wh / 2, ww, wh, 0, vec4(0f, 0f, 0f, alpha))
@@ -314,8 +328,14 @@ proc drawLevelUp[G](game: G, ww, wh: float) =
   for i, c in m.choices[]:
     let y = wh / 2 - 70 + float(i) * 70
     let marker = if i == m.selected: "> " else: "  "
+    case c.kind
+    of NewWeapon, UpgradeWeapon: addIcon(weaponDefs[c.weapon].sprite, ww / 2 - 240, y + 20, 48)
+    of NewPassive, UpgradePassive: addIcon(passiveDefs[c.passive].sprite, ww / 2 - 240, y + 20, 48)
+    of BonusGold: addIcon(SprCoin, ww / 2 - 240, y + 20, 48)
+    of BonusHeal: addIcon(SprChicken, ww / 2 - 240, y + 20, 48)
     drawText(game, marker & c.title, ww / 2 - 200, y, ww, wh, if i == m.selected: yellow else: white)
     drawText(game, c.desc, ww / 2 - 170, y + 26, ww, wh, white, 0.8)
+  flushItems(game, ww, wh, mat3f(1), false)
   drawTextCentered(game, "Up/Down + Enter, or 1/2/3", wh - 60, ww, wh, white, 0.8)
 
 proc drawPaused[G](game: G, ww, wh: float) =
