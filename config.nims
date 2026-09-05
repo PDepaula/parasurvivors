@@ -28,9 +28,12 @@ when defined(emscripten):
   mkDir("web")
   # Emscripten's default 64 KB stack overflows inside the first running tick (the
   # pararules session code is deeply nested); match the 8 MB a Linux thread gets.
+  # `-d:singlefile` base64-inlines the wasm into the html, so web/index.html is one
+  # self-contained page: mailable, and it runs over file:// with no server. Costs ~35% size.
+  const singleFile = when defined(singlefile): " -s SINGLE_FILE=1" else: ""
   switch("passL", "-o web/index.html -s ALLOW_MEMORY_GROWTH=1 -s STACK_SIZE=8388608 " &
                   "-s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2 " &
-                  "--shell-file shell_minimal.html")
+                  "--shell-file shell_minimal.html" & singleFile)
 elif defined(release):
   --app:gui
 
