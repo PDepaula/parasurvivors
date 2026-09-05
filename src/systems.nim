@@ -15,6 +15,7 @@ type
     kind*: WeaponKind
     x*, y*, vx*, vy*, size*, damage*, ttl*, angle*: float
     pierce*: int
+    held*: bool ## drawn by the player's attack sheet, so render skips the icon
   ChoiceKind* = enum
     NewWeapon, UpgradeWeapon, NewPassive, UpgradePassive, BonusGold, BonusHeal
   Choice* = object
@@ -41,11 +42,18 @@ proc buildGrid*[E](enemies: openArray[E]): Table[(int, int), seq[int]] =
     result.mgetOrPut(cellOf(e.pos.x, e.pos.y), @[]).add(i)
 
 proc hitsEnemy[P, E](p: P, e: E): bool =
-  if p.kind == DragonSpear:
-    abs(e.pos.x - p.pos.x) < p.size / 2 + enemyRadius(e.size) and
-      abs(e.pos.y - p.pos.y) < lungeHalfWidth + enemyRadius(e.size)
+  let r = enemyRadius(e.size)
+  if weaponDefs[p.kind].motion == Lunge:
+    # rectangle of length p.size along p.angle, half-width lungeHalfWidth across it
+    let dx = cos(p.angle)
+    let dy = sin(p.angle)
+    let ox = e.pos.x - p.pos.x
+    let oy = e.pos.y - p.pos.y
+    let along = ox * dx + oy * dy
+    let across = -ox * dy + oy * dx
+    abs(along) < p.size / 2 + r and abs(across) < lungeHalfWidth + r
   else:
-    dist(p.pos.x, p.pos.y, e.pos.x, e.pos.y) < p.size + enemyRadius(e.size)
+    dist(p.pos.x, p.pos.y, e.pos.x, e.pos.y) < p.size + r
 
 proc collide*[P, E](projs: openArray[P], enemies: openArray[E]): seq[Hit] =
   ## Every (projectile, enemy) overlap this tick, honouring pierce and hitIds.
@@ -118,9 +126,19 @@ proc facingVec*(d: Dir): (float, float) =
   of Left: (-1.0, 0.0)
   of Right: (1.0, 0.0)
 
+proc lungeDir*(facing: Dir, i: int): (float, float) =
+  ## Direction of volley `i` of a lunge: facing, opposite, then the two perpendiculars.
+  let (fx, fy) = facingVec(facing)
+  case i mod 4
+  of 0: (fx, fy)
+  of 1: (-fx, -fy)
+  of 2: (-fy, fx)
+  else: (fy, -fx)
+
 proc attackPlan*(kind: WeaponKind, level: int, st: Stats, px, py: float, facing: Dir,
-                 hasNearest: bool, nx, ny: float): seq[ProjSpec] =
-  ## The projectiles one weapon activation creates.
+                 hasNearest: bool, nx, ny: float, starter = false): seq[ProjSpec] =
+  ## The projectiles one weapon activation creates. `starter` = this is the hero's own weapon,
+  ## whose first lunge is drawn by the body's attack animation instead of an icon.
   let w = weaponAt(kind, level)
   let n = max(1, w.amount + st.amount)
   let dmg = w.damage * st.might
@@ -128,14 +146,14 @@ proc attackPlan*(kind: WeaponKind, level: int, st: Stats, px, py: float, facing:
   let ttl = w.ttl * st.duration
   let speed = w.speed * st.projSpeed
   let (fx, fy) = facingVec(facing)
-  case kind
-  of DragonSpear:
+  case w.motion
+  of Lunge:
     for i in 0 ..< n:
-      let side = if i mod 2 == 0: 1.0 else: -1.0
-      let dirx = (if facing == Left: -1.0 else: 1.0) * side
-      result.add ProjSpec(kind: DragonSpear, x: px + dirx * size / 2, y: py - float(i div 2) * 20,
-                          size: size, damage: dmg, ttl: ttl, pierce: w.pierce)
-  of ArcaneStaff:
+      let (dx, dy) = lungeDir(facing, i)
+      result.add ProjSpec(kind: kind, x: px + dx * size / 2, y: py + dy * size / 2,
+                          size: size, damage: dmg, ttl: ttl, angle: arctan2(dy, dx), pierce: w.pierce,
+                          held: starter and i == 0)
+  of Homing:
     var dx = fx
     var dy = fy
     if hasNearest:
@@ -145,31 +163,31 @@ proc attackPlan*(kind: WeaponKind, level: int, st: Stats, px, py: float, facing:
     let base = arctan2(dy / len, dx / len)
     for i in 0 ..< n:
       let a = base + (float(i) - float(n - 1) / 2) * 0.15
-      result.add ProjSpec(kind: ArcaneStaff, x: px, y: py, vx: cos(a) * speed, vy: sin(a) * speed,
+      result.add ProjSpec(kind: kind, x: px, y: py, vx: cos(a) * speed, vy: sin(a) * speed,
                           size: size, damage: dmg, ttl: ttl, angle: a, pierce: w.pierce)
-  of Longbow:
+  of Straight:
     for i in 0 ..< n:
       let off = (float(i) - float(n - 1) / 2) * 10
-      result.add ProjSpec(kind: Longbow, x: px - fy * off, y: py + fx * off, vx: fx * speed, vy: fy * speed,
+      result.add ProjSpec(kind: kind, x: px - fy * off, y: py + fx * off, vx: fx * speed, vy: fy * speed,
                           size: size, damage: dmg, ttl: ttl, angle: arctan2(fy, fx), pierce: w.pierce)
-  of WarAxe:
+  of Arc:
     for i in 0 ..< n:
       let dirx = if fx != 0: fx else: (if i mod 2 == 0: 1.0 else: -1.0)
-      result.add ProjSpec(kind: WarAxe, x: px, y: py, vx: dirx * (60 + float(i) * 30), vy: -speed * 1.5,
+      result.add ProjSpec(kind: kind, x: px, y: py, vx: dirx * (60 + float(i) * 30), vy: -speed * 1.5,
                           size: size, damage: dmg, ttl: ttl, pierce: w.pierce)
-  of Boomerang:
+  of Return:
     for i in 0 ..< n:
       let a = rand(2 * PI)
-      result.add ProjSpec(kind: Boomerang, x: px, y: py, vx: cos(a) * speed, vy: sin(a) * speed,
+      result.add ProjSpec(kind: kind, x: px, y: py, vx: cos(a) * speed, vy: sin(a) * speed,
                           size: size, damage: dmg, ttl: ttl, angle: a, pierce: w.pierce)
-  of Garlic:
-    result.add ProjSpec(kind: Garlic, x: px, y: py, size: size, damage: dmg, ttl: w.ttl, pierce: w.pierce)
-  of RoundShield:
+  of Aura:
+    result.add ProjSpec(kind: kind, x: px, y: py, size: size, damage: dmg, ttl: w.ttl, pierce: w.pierce)
+  of Orbit:
     let r = orbitRadius * st.area
     for i in 0 ..< n:
       let a = float(i) * 2 * PI / float(n)
       # vx = angular speed (rad/s), vy = orbit radius; moveProjectiles reads them that way
-      result.add ProjSpec(kind: RoundShield, x: px + cos(a) * r, y: py + sin(a) * r, vx: speed, vy: r,
+      result.add ProjSpec(kind: kind, x: px + cos(a) * r, y: py + sin(a) * r, vx: speed, vy: r,
                           size: size, damage: dmg, ttl: ttl, angle: a, pierce: w.pierce)
 
 proc generateChoices*(owned: openArray[(WeaponKind, int)],
