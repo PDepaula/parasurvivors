@@ -23,7 +23,7 @@ suite "rules: session and player":
     check p.xpToNext == 5
     let ws = s.queryAll(gameRules.getWeapons)
     check ws.len == 1
-    check ws[0].kind == Whip
+    check ws[0].kind == DragonSpear
     check ws[0].level == 1
     let (phase) = s.query(gameRules.getPhase)
     check phase == Running
@@ -93,14 +93,14 @@ suite "rules: session and player":
 suite "rules: weapons and projectiles":
   test "weapon fires when its cooldown expires and resets it":
     var s = newSession()
-    s.startRun(Gino) # Knife, +1 amount
+    s.startRun(Gino) # Longbow, +1 amount
     check s.queryAll(gameRules.getProjectiles).len == 0
     s.step(0.25) # initial cooldown is 0.2
     let ps = s.queryAll(gameRules.getProjectiles)
     check ps.len == 2
-    check ps[0].kind == Knife
+    check ps[0].kind == Longbow
     let w = s.queryAll(gameRules.getWeapons)[0]
-    check abs(w.cooldown - weaponDefs[Knife].cooldown) < 1e-6
+    check abs(w.cooldown - weaponDefs[Longbow].cooldown) < 1e-6
 
   test "projectiles move and age":
     var s = newSession()
@@ -113,23 +113,24 @@ suite "rules: weapons and projectiles":
     check after.pos.x > before.pos.x
     check abs(after.ttl - (before.ttl - 0.1)) < 1e-9
 
-  test "king bible orbits the player":
+  test "round shield orbits the player":
     var s = newSession()
     s.startRun(Otto)
-    s.addWeapon(KingBible)
+    s.addWeapon(RoundShield)
     s.step(0.25)
-    let bibles = s.queryAll(gameRules.getProjectiles).filterIt(it.kind == KingBible)
-    check bibles.len == 1
+    let shields = s.queryAll(gameRules.getProjectiles).filterIt(it.kind == RoundShield)
+    check shields.len == 1
     s.insert(Player, Pos, (500.0, 0.0))
     s.step(0.1)
-    let b = s.query(gameRules.getProjectiles, id = bibles[0].id)
-    check abs(dist(b.pos.x, b.pos.y, 500.0, 0.0) - bibleOrbitRadius) < 1e-6
+    let b = s.query(gameRules.getProjectiles, id = shields[0].id)
+    check abs(dist(b.pos.x, b.pos.y, 500.0, 0.0) - orbitRadius) < 1e-6
 
-  test "runetracer bounces inside the view":
+  test "boomerang bounces inside the view":
     var s = newSession()
-    s.startRun(Lina)
+    s.startRun(Otto)
+    s.addWeapon(Boomerang)
     s.step(0.25)
-    let r = s.queryAll(gameRules.getProjectiles)[0]
+    let r = s.queryAll(gameRules.getProjectiles).filterIt(it.kind == Boomerang)[0]
     s.insert(r.id, Pos, (0.0, 0.0))
     s.insert(r.id, VX, -1000.0)
     s.insert(r.id, VY, 0.0)
@@ -141,7 +142,7 @@ suite "rules: weapons and projectiles":
   test "insert/retract projectile round trip":
     var s = newSession()
     s.startRun(Otto)
-    let id = s.insertProjectile(ProjSpec(kind: Axe, x: 1, y: 2, vx: 3, vy: 4, size: 5, damage: 6, ttl: 7, angle: 0, pierce: 8))
+    let id = s.insertProjectile(ProjSpec(kind: WarAxe, x: 1, y: 2, vx: 3, vy: 4, size: 5, damage: 6, ttl: 7, angle: 0, pierce: 8))
     check s.queryAll(gameRules.getProjectiles).len == 1
     s.retractProjectile(id)
     check s.queryAll(gameRules.getProjectiles).len == 0
@@ -229,7 +230,7 @@ suite "rules: systems step, level up, death":
     var s = newSession()
     s.startRun(Otto)
     let e = s.spawnEnemy(Bat, 50.0, 0.0, 0)
-    discard s.insertProjectile(ProjSpec(kind: MagicWand, x: 50, y: 0, size: 10, damage: 5, ttl: 1, pierce: 0))
+    discard s.insertProjectile(ProjSpec(kind: ArcaneStaff, x: 50, y: 0, size: 10, damage: 5, ttl: 1, pierce: 0))
     let ev = s.runTick(0.001)
     check ev.hits == 1
     check ev.kills == 1
@@ -244,7 +245,7 @@ suite "rules: systems step, level up, death":
     var s = newSession()
     s.startRun(Otto)
     let e = s.spawnEnemy(Koalio, 0.0, 0.0, 0)
-    let p = s.insertProjectile(ProjSpec(kind: Knife, x: 0, y: 0, size: 10, damage: 5, ttl: 1, pierce: 3))
+    let p = s.insertProjectile(ProjSpec(kind: Longbow, x: 0, y: 0, size: 10, damage: 5, ttl: 1, pierce: 3))
     discard s.runTick(0.001)
     let en = s.query(gameRules.getEnemies, id = e)
     check abs(en.hp - (enemyDefs[Koalio].hp - 5)) < 1e-6
@@ -259,7 +260,7 @@ suite "rules: systems step, level up, death":
     s.startRun(Otto)
     let e = s.spawnEnemy(Koalio, 0.0, 0.0, 0)
     s.insert(e, Hp, 1.0)
-    discard s.insertProjectile(ProjSpec(kind: Knife, x: 0, y: 0, size: 10, damage: 5, ttl: 1, pierce: 3))
+    discard s.insertProjectile(ProjSpec(kind: Longbow, x: 0, y: 0, size: 10, damage: 5, ttl: 1, pierce: 3))
     let ev = s.runTick(0.001)
     check ev.bossKilled
     check s.queryAll(gameRules.getPickups).anyIt(it.kind == Chest)
@@ -298,7 +299,7 @@ suite "rules: systems step, level up, death":
     s.applyChoice(Choice(kind: NewPassive, passive: Spinach, level: 1))
     check s.queryAll(gameRules.getPassives).len == 1
     check abs(s.query(gameRules.getStats).stats.might - 1.2) < 1e-9
-    s.applyChoice(Choice(kind: UpgradeWeapon, weapon: Whip, level: 2))
+    s.applyChoice(Choice(kind: UpgradeWeapon, weapon: DragonSpear, level: 2))
     check s.queryAll(gameRules.getWeapons)[0].level == 2
     s.applyChoice(Choice(kind: NewPassive, passive: HollowHeart, level: 1))
     check s.query(gameRules.getPlayer).maxHp == 144.0

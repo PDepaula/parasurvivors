@@ -6,7 +6,6 @@ import data
 
 const
   gridCell* = 64.0
-  whipHalfHeight = 30.0
 
 type
   Hit* = object
@@ -42,9 +41,9 @@ proc buildGrid*[E](enemies: openArray[E]): Table[(int, int), seq[int]] =
     result.mgetOrPut(cellOf(e.pos.x, e.pos.y), @[]).add(i)
 
 proc hitsEnemy[P, E](p: P, e: E): bool =
-  if p.kind == Whip:
+  if p.kind == DragonSpear:
     abs(e.pos.x - p.pos.x) < p.size / 2 + enemyRadius(e.size) and
-      abs(e.pos.y - p.pos.y) < whipHalfHeight + enemyRadius(e.size)
+      abs(e.pos.y - p.pos.y) < lungeHalfWidth + enemyRadius(e.size)
   else:
     dist(p.pos.x, p.pos.y, e.pos.x, e.pos.y) < p.size + enemyRadius(e.size)
 
@@ -130,13 +129,13 @@ proc attackPlan*(kind: WeaponKind, level: int, st: Stats, px, py: float, facing:
   let speed = w.speed * st.projSpeed
   let (fx, fy) = facingVec(facing)
   case kind
-  of Whip:
+  of DragonSpear:
     for i in 0 ..< n:
       let side = if i mod 2 == 0: 1.0 else: -1.0
       let dirx = (if facing == Left: -1.0 else: 1.0) * side
-      result.add ProjSpec(kind: Whip, x: px + dirx * size / 2, y: py - float(i div 2) * 20,
+      result.add ProjSpec(kind: DragonSpear, x: px + dirx * size / 2, y: py - float(i div 2) * 20,
                           size: size, damage: dmg, ttl: ttl, pierce: w.pierce)
-  of MagicWand:
+  of ArcaneStaff:
     var dx = fx
     var dy = fy
     if hasNearest:
@@ -146,31 +145,31 @@ proc attackPlan*(kind: WeaponKind, level: int, st: Stats, px, py: float, facing:
     let base = arctan2(dy / len, dx / len)
     for i in 0 ..< n:
       let a = base + (float(i) - float(n - 1) / 2) * 0.15
-      result.add ProjSpec(kind: MagicWand, x: px, y: py, vx: cos(a) * speed, vy: sin(a) * speed,
+      result.add ProjSpec(kind: ArcaneStaff, x: px, y: py, vx: cos(a) * speed, vy: sin(a) * speed,
                           size: size, damage: dmg, ttl: ttl, angle: a, pierce: w.pierce)
-  of Knife:
+  of Longbow:
     for i in 0 ..< n:
       let off = (float(i) - float(n - 1) / 2) * 10
-      result.add ProjSpec(kind: Knife, x: px - fy * off, y: py + fx * off, vx: fx * speed, vy: fy * speed,
+      result.add ProjSpec(kind: Longbow, x: px - fy * off, y: py + fx * off, vx: fx * speed, vy: fy * speed,
                           size: size, damage: dmg, ttl: ttl, angle: arctan2(fy, fx), pierce: w.pierce)
-  of Axe:
+  of WarAxe:
     for i in 0 ..< n:
       let dirx = if fx != 0: fx else: (if i mod 2 == 0: 1.0 else: -1.0)
-      result.add ProjSpec(kind: Axe, x: px, y: py, vx: dirx * (60 + float(i) * 30), vy: -speed * 1.5,
+      result.add ProjSpec(kind: WarAxe, x: px, y: py, vx: dirx * (60 + float(i) * 30), vy: -speed * 1.5,
                           size: size, damage: dmg, ttl: ttl, pierce: w.pierce)
-  of Runetracer:
+  of Boomerang:
     for i in 0 ..< n:
       let a = rand(2 * PI)
-      result.add ProjSpec(kind: Runetracer, x: px, y: py, vx: cos(a) * speed, vy: sin(a) * speed,
+      result.add ProjSpec(kind: Boomerang, x: px, y: py, vx: cos(a) * speed, vy: sin(a) * speed,
                           size: size, damage: dmg, ttl: ttl, angle: a, pierce: w.pierce)
   of Garlic:
     result.add ProjSpec(kind: Garlic, x: px, y: py, size: size, damage: dmg, ttl: w.ttl, pierce: w.pierce)
-  of KingBible:
-    let r = bibleOrbitRadius * st.area
+  of RoundShield:
+    let r = orbitRadius * st.area
     for i in 0 ..< n:
       let a = float(i) * 2 * PI / float(n)
       # vx = angular speed (rad/s), vy = orbit radius; moveProjectiles reads them that way
-      result.add ProjSpec(kind: KingBible, x: px + cos(a) * r, y: py + sin(a) * r, vx: speed, vy: r,
+      result.add ProjSpec(kind: RoundShield, x: px + cos(a) * r, y: py + sin(a) * r, vx: speed, vy: r,
                           size: size, damage: dmg, ttl: ttl, angle: a, pierce: w.pierce)
 
 proc generateChoices*(owned: openArray[(WeaponKind, int)],

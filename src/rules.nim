@@ -330,21 +330,21 @@ let (initSession, rulesInternal) =
       then:
         session.insert(id, Ttl, ttl - dt)
         case kind
-        of Whip:
+        of DragonSpear:
           discard # stays where it was spawned
         of Garlic:
           session.insert(id, Pos, ppos)
-        of KingBible:
+        of RoundShield:
           # vx = angular speed, vy = orbit radius (see systems.attackPlan)
           let a = angle + vx * dt
           session.insert(id, Angle, a)
           session.insert(id, Pos, (ppos.x + cos(a) * vy, ppos.y + sin(a) * vy))
-        of Axe:
+        of WarAxe:
           let vy2 = vy + axeGravity * dt
           session.insert(id, VY, vy2)
           session.insert(id, Pos, (pos.x + vx * dt, pos.y + vy2 * dt))
           session.insert(id, Angle, angle + 10 * dt)
-        of Runetracer:
+        of Boomerang:
           var nx = pos.x + vx * dt
           var ny = pos.y + vy * dt
           var nvx = vx
@@ -368,7 +368,7 @@ let (initSession, rulesInternal) =
           session.insert(id, Pos, (nx, ny))
           session.insert(id, VX, nvx)
           session.insert(id, VY, nvy)
-        of MagicWand, Knife:
+        of ArcaneStaff, Longbow:
           session.insert(id, Pos, (pos.x + vx * dt, pos.y + vy * dt))
 
     rule moveEnemies(Fact):
@@ -715,7 +715,7 @@ proc stepSystems*(session: var Session[Fact, FactMatch], dt: float): StepEvents 
   if dmg > 0 or heal > 0:
     session.insert(Player, Hp, min(player.maxHp, player.hp - dmg + heal))
 
-  # 6. targeting for the magic wand
+  # 6. targeting for the arcane staff
   let near = nearestEnemy(enemies, px, py)
   session.insert(Global, HasNearest, near.found)
   session.insert(Global, NearestX, near.x)

@@ -8,7 +8,7 @@ from paranim/primitives import nil
 import paratext, paratext/gl/text
 import stb_image/read as stbi
 import pararules
-import tables, math, strutils, sequtils
+import math, strutils, sequtils
 import data, systems, rules
 
 const
@@ -19,20 +19,11 @@ const
   groundRows = 70
   white = vec4(1f, 1f, 1f, 1f)
   yellow = vec4(1f, 0.9f, 0.3f, 1f)
-  sheetFiles = {
-    "otto": (staticRead("assets/otto.png"), 64, 64),
-    "imma": (staticRead("assets/imma.png"), 64, 64),
-    "lina": (staticRead("assets/lina.png"), 64, 64),
-    "gino": (staticRead("assets/gino.png"), 64, 64),
-    "zombie": (staticRead("assets/zombie.png"), 64, 64),
-    "skeleton": (staticRead("assets/skeleton.png"), 64, 64),
-    "mudman": (staticRead("assets/mudman.png"), 64, 64),
-    "ghost": (staticRead("assets/ghost.png"), 64, 64),
-    "reaper": (staticRead("assets/reaper.png"), 64, 64),
-    "bat": (staticRead("assets/bat.png"), 32, 32),
-    "koalio": (staticRead("assets/koalio.png"), 18, 26),
-    "parakeet": (staticRead("assets/parakeet.png"), 70, 100),
-  }
+  sheetPng = block:
+    var a: array[SheetId, string]
+    for id in SheetId:
+      a[id] = staticRead("assets/" & sheetDefs[id].file)
+    a
   grassPng = staticRead("assets/grass.png")
   ttf = staticRead("assets/Roboto-Regular.ttf")
 
@@ -43,7 +34,7 @@ type
     batch: InstancedImageEntity
 
 var
-  sheets: Table[string, Sheet]
+  sheets: array[SheetId, Sheet]
   shapeBase: UncompiledTwoDEntity
   shapes: InstancedTwoDEntity
   ground: InstancedImageEntity
@@ -64,10 +55,10 @@ proc initRender*[G](game: var G) =
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
   glDisable(GL_CULL_FACE)
   glDisable(GL_DEPTH_TEST)
-  for (name, entry) in sheetFiles:
-    let base = loadImage(entry[0])
-    sheets[name] = Sheet(frameW: entry[1], frameH: entry[2], base: base,
-                         batch: compile(game, initInstancedEntity(base)))
+  for id in SheetId:
+    let base = loadImage(sheetPng[id])
+    sheets[id] = Sheet(frameW: sheetDefs[id].cellW, frameH: sheetDefs[id].cellH, base: base,
+                       batch: compile(game, initInstancedEntity(base)))
   shapeBase = initTwoDEntity(primitives.rectangle[GLfloat]())
   shapes = compile(game, initInstancedEntity(shapeBase))
   block:
@@ -103,10 +94,10 @@ proc clear(b: var InstancedTextEntity) =
   b.attributes.a_color.data[].setLen(0)
   b.instanceCount = 0
 
-proc addSprite(name: string, col, row: int, cx, cy, w, h: float, flip = false) =
-  var e = sheets[name].base
-  let fw = float(sheets[name].frameW)
-  let fh = float(sheets[name].frameH)
+proc addSprite(id: SheetId, col, row: int, cx, cy, w, h: float, flip = false) =
+  var e = sheets[id].base
+  let fw = float(sheets[id].frameW)
+  let fh = float(sheets[id].frameH)
   e.crop(float(col) * fw, float(row) * fh, fw, fh)
   if flip:
     e.translate(cx + w / 2, cy - h / 2)
@@ -114,17 +105,17 @@ proc addSprite(name: string, col, row: int, cx, cy, w, h: float, flip = false) =
   else:
     e.translate(cx - w / 2, cy - h / 2)
     e.scale(w, h)
-  sheets[name].batch.add(e)
+  sheets[id].batch.add(e)
 
 proc flushSprites[G](game: G, ww, wh: float, camera: Mat3x3[GLfloat]) =
-  for name, sh in sheets.mpairs:
-    if sh.batch.attributes.a_matrix.data[].len == 0:
+  for id in SheetId:
+    if sheets[id].batch.attributes.a_matrix.data[].len == 0:
       continue
-    var b = sh.batch
+    var b = sheets[id].batch
     b.project(ww, wh)
     b.invert(camera)
     render(game, b)
-    sh.batch.clear()
+    sheets[id].batch.clear()
 
 proc addRect*(cx, cy, w, h, angle: float, color: Vec4[GLfloat]) =
   var e = shapeBase
@@ -203,13 +194,13 @@ proc pickupColor(kind: PickupKind): Vec4[GLfloat] =
 
 proc projColor(kind: WeaponKind): Vec4[GLfloat] =
   case kind
-  of Whip: vec4(1f, 1f, 1f, 0.7f)
-  of MagicWand: vec4(0.5f, 0.7f, 1f, 1f)
-  of Knife: vec4(0.85f, 0.85f, 0.9f, 1f)
-  of Axe: vec4(0.7f, 0.5f, 0.3f, 1f)
-  of Runetracer: vec4(0.4f, 1f, 0.6f, 1f)
+  of DragonSpear: vec4(1f, 1f, 1f, 0.7f)
+  of ArcaneStaff: vec4(0.5f, 0.7f, 1f, 1f)
+  of Longbow: vec4(0.85f, 0.85f, 0.9f, 1f)
+  of WarAxe: vec4(0.7f, 0.5f, 0.3f, 1f)
+  of Boomerang: vec4(0.4f, 1f, 0.6f, 1f)
   of Garlic: vec4(1f, 1f, 0.8f, 0.25f)
-  of KingBible: vec4(0.9f, 0.8f, 0.5f, 1f)
+  of RoundShield: vec4(0.9f, 0.8f, 0.5f, 1f)
 
 proc drawWorld[G](game: G, ww, wh, tt: float) =
   let player = session.query(gameRules.getPlayer)
@@ -272,12 +263,12 @@ proc drawWorld[G](game: G, ww, wh, tt: float) =
   # projectiles and hit flashes
   for p in session.queryAll(gameRules.getProjectiles):
     case p.kind
-    of Whip:
-      addRect(p.pos.x, p.pos.y, p.size, 12, 0, projColor(Whip))
-    of Knife:
-      addRect(p.pos.x, p.pos.y, 22, 6, p.angle, projColor(Knife))
-    of Axe:
-      addRect(p.pos.x, p.pos.y, p.size * 1.4, p.size * 1.4, p.angle, projColor(Axe))
+    of DragonSpear:
+      addRect(p.pos.x, p.pos.y, p.size, 12, 0, projColor(DragonSpear))
+    of Longbow:
+      addRect(p.pos.x, p.pos.y, 22, 6, p.angle, projColor(Longbow))
+    of WarAxe:
+      addRect(p.pos.x, p.pos.y, p.size * 1.4, p.size * 1.4, p.angle, projColor(WarAxe))
     of Garlic:
       discard
     else:

@@ -6,7 +6,28 @@ type
   CharacterKind* = enum
     Otto, Imma, Lina, Gino
   WeaponKind* = enum
-    Whip, MagicWand, Knife, Axe, Runetracer, Garlic, KingBible
+    DragonSpear, ArcaneStaff, Longbow, WarAxe, Boomerang, Garlic, RoundShield
+  Motion* = enum
+    ## How a weapon's projectiles spawn and move (see systems.attackPlan, rules.moveProjectiles).
+    Lunge,    ## stationary hitbox along the faced direction (Dragon Spear)
+    Straight, ## flies in the faced direction (Longbow)
+    Homing,   ## aimed at the nearest enemy (Arcane Staff)
+    Arc,      ## thrown up, falls under gravity (War Axe)
+    Return,   ## flies out, curves back to the player (Boomerang)
+    Orbit,    ## circles the player (Round Shield)
+    Aura      ## ring centred on the player (Garlic)
+  BodyAnim* = enum
+    ## LPC attack animation the player's body plays when their starter weapon fires.
+    NoAnim, AnimThrust, AnimSlash, AnimShoot, AnimCast
+  SheetId* = enum
+    ## Batches flush in this order, so enemies come first and the survivors draw on top.
+    ShZombie, ShSkeleton, ShMudman, ShGhost, ShReaper, ShBat, ShKoalio, ShParakeet,
+    ShOtto, ShOttoAttack, ShImma, ShImmaAttack, ShLina, ShLinaAttack, ShGino, ShGinoAttack
+  Sprite* = enum
+    ## Icons in assets/items.png; manifest name = enum name without "Spr", lower-cased.
+    SprSpear, SprBolt, SprArrow, SprAxe, SprBoomerang, SprShield, SprGarlic, SprAura, SprSpark,
+    SprGemBlue, SprGemGreen, SprGemRed, SprCoin, SprChicken, SprChest, SprVacuum,
+    SprSpinach, SprArmor, SprHollowHeart, SprPummarola, SprEmptyTome, SprWings, SprAttractorb
   PassiveKind* = enum
     Spinach, Armor, HollowHeart, Pummarola, EmptyTome, Wings, Attractorb
   EnemyKind* = enum
@@ -16,13 +37,15 @@ type
   Dir* = enum
     Up, Left, Down, Right ## LPC sheet row order
   Vec2* = tuple[x, y: float] ## one position fact per entity (see rules.nim)
+  Rect* = tuple[x, y, w, h: int]
 
   Stats* = object
     might*, armor*, regen*, cooldownMul*, speedMul*, magnet*, area*, projSpeed*, duration*: float
     amount*: int
 
   CharacterDef* = object
-    name*, perk*, sheet*: string
+    name*, perk*: string
+    sheet*, attackSheet*: SheetId
     weapon*: WeaponKind
     maxHp*: float
     base*: Stats
@@ -31,6 +54,11 @@ type
     name*, desc*: string
     cooldown*, damage*, speed*, ttl*, size*: float
     amount*, pierce*: int
+    sprite*: Sprite
+    motion*: Motion
+    anim*: BodyAnim      ## body animation when this is the hero's starter weapon
+    spin*: float         ## icon rotation speed, rad/s
+    drawScale*: float    ## icon width = size * drawScale
 
   WeaponUpgrade* = object ## additive deltas applied when reaching that level
     damage*, cooldown*, size*, speed*, ttl*: float
@@ -39,12 +67,21 @@ type
 
   PassiveDef* = object
     name*, desc*: string
+    sprite*: Sprite
 
   EnemyDef* = object
     hp*, speed*, damage*, size*: float
     gem*: PickupKind
-    sheet*: string
+    sheet*: SheetId
     boss*: bool
+
+  SheetDef* = object
+    file*: string
+    cellW*, cellH*: int
+
+  AnimDef* = object
+    frames*: int
+    secs*: float
 
   Wave* = object
     minute*: int
@@ -72,7 +109,10 @@ const
   baseMagnet* = 48.0
   gemFlySpeed* = 420.0
   axeGravity* = 900.0
-  bibleOrbitRadius* = 90.0
+  orbitRadius* = 90.0
+  lungeHalfWidth* = 24.0       ## half-width of a Lunge hitbox across its direction
+  boomerangAccel* = 220.0      ## px/s² pull toward the player for Return projectiles
+  boomerangCatchRadius* = 20.0 ## a returning boomerang this close to the player is caught
   chickenHeal* = 30.0
   coinValue* = 10
   chestGoldFallback* = 50
@@ -105,36 +145,70 @@ const
   defaultStats* = Stats(might: 1.0, armor: 0.0, regen: 0.0, cooldownMul: 1.0, speedMul: 1.0,
                         magnet: 1.0, area: 1.0, projSpeed: 1.0, duration: 1.0, amount: 0)
 
+  sheetDefs*: array[SheetId, SheetDef] = [
+    ShZombie: SheetDef(file: "zombie.png", cellW: 64, cellH: 64),
+    ShSkeleton: SheetDef(file: "skeleton.png", cellW: 64, cellH: 64),
+    ShMudman: SheetDef(file: "mudman.png", cellW: 64, cellH: 64),
+    ShGhost: SheetDef(file: "ghost.png", cellW: 64, cellH: 64),
+    ShReaper: SheetDef(file: "reaper.png", cellW: 64, cellH: 64),
+    ShBat: SheetDef(file: "bat.png", cellW: 32, cellH: 32),
+    ShKoalio: SheetDef(file: "koalio.png", cellW: 18, cellH: 26),
+    ShParakeet: SheetDef(file: "parakeet.png", cellW: 70, cellH: 100),
+    ShOtto: SheetDef(file: "otto.png", cellW: 64, cellH: 64),
+    ShOttoAttack: SheetDef(file: "otto_attack.png", cellW: 192, cellH: 192),
+    ShImma: SheetDef(file: "imma.png", cellW: 64, cellH: 64),
+    ShImmaAttack: SheetDef(file: "imma_attack.png", cellW: 64, cellH: 64),
+    ShLina: SheetDef(file: "lina.png", cellW: 64, cellH: 64),
+    ShLinaAttack: SheetDef(file: "lina_attack.png", cellW: 192, cellH: 192),
+    ShGino: SheetDef(file: "gino.png", cellW: 64, cellH: 64),
+    ShGinoAttack: SheetDef(file: "gino_attack.png", cellW: 64, cellH: 64),
+  ]
+
+  animDefs*: array[BodyAnim, AnimDef] = [
+    NoAnim: AnimDef(frames: 1, secs: 0.0),
+    AnimThrust: AnimDef(frames: 8, secs: 0.4),
+    AnimSlash: AnimDef(frames: 6, secs: 0.3),
+    AnimShoot: AnimDef(frames: 13, secs: 0.5),
+    AnimCast: AnimDef(frames: 7, secs: 0.35),
+  ]
+
   characterDefs*: array[CharacterKind, CharacterDef] = [
-    Otto: CharacterDef(name: "Otto", perk: "+10% Might", sheet: "otto", weapon: Whip, maxHp: 120,
+    Otto: CharacterDef(name: "Otto", perk: "+10% Might", sheet: ShOtto, attackSheet: ShOttoAttack, weapon: DragonSpear, maxHp: 120,
       base: Stats(might: 1.1, armor: 0, regen: 0, cooldownMul: 1.0, speedMul: 1.0, magnet: 1.0, area: 1.0, projSpeed: 1.0, duration: 1.0, amount: 0)),
-    Imma: CharacterDef(name: "Imma", perk: "-10% Cooldown", sheet: "imma", weapon: MagicWand, maxHp: 100,
+    Imma: CharacterDef(name: "Imma", perk: "-10% Cooldown", sheet: ShImma, attackSheet: ShImmaAttack, weapon: ArcaneStaff, maxHp: 100,
       base: Stats(might: 1.0, armor: 0, regen: 0, cooldownMul: 0.9, speedMul: 1.0, magnet: 1.0, area: 1.0, projSpeed: 1.0, duration: 1.0, amount: 0)),
-    Lina: CharacterDef(name: "Lina", perk: "+20% Projectile speed", sheet: "lina", weapon: Runetracer, maxHp: 90,
+    Lina: CharacterDef(name: "Lina", perk: "+20% Projectile speed", sheet: ShLina, attackSheet: ShLinaAttack, weapon: WarAxe, maxHp: 90,
       base: Stats(might: 1.0, armor: 0, regen: 0, cooldownMul: 1.0, speedMul: 1.0, magnet: 1.0, area: 1.0, projSpeed: 1.2, duration: 1.0, amount: 0)),
-    Gino: CharacterDef(name: "Gino", perk: "+1 Projectile", sheet: "gino", weapon: Knife, maxHp: 100,
+    Gino: CharacterDef(name: "Gino", perk: "+1 Projectile", sheet: ShGino, attackSheet: ShGinoAttack, weapon: Longbow, maxHp: 100,
       base: Stats(might: 1.0, armor: 0, regen: 0, cooldownMul: 1.0, speedMul: 1.0, magnet: 1.0, area: 1.0, projSpeed: 1.0, duration: 1.0, amount: 1)),
   ]
 
   weaponDefs*: array[WeaponKind, WeaponDef] = [
-    Whip: WeaponDef(name: "Whip", desc: "Attacks horizontally, passes through enemies",
-      cooldown: 1.35, damage: 10, speed: 0, ttl: 0.15, size: 120, amount: 1, pierce: 999),
-    MagicWand: WeaponDef(name: "Magic Wand", desc: "Fires at the nearest enemy",
-      cooldown: 1.2, damage: 10, speed: 300, ttl: 2.5, size: 10, amount: 1, pierce: 0),
-    Knife: WeaponDef(name: "Knife", desc: "Flies quickly in the faced direction",
-      cooldown: 1.0, damage: 6.5, speed: 450, ttl: 1.5, size: 8, amount: 1, pierce: 1),
-    Axe: WeaponDef(name: "Axe", desc: "High damage, arcs overhead",
-      cooldown: 4.0, damage: 20, speed: 300, ttl: 2.5, size: 20, amount: 1, pierce: 3),
-    Runetracer: WeaponDef(name: "Runetracer", desc: "Bounces around, passes through enemies",
-      cooldown: 3.0, damage: 10, speed: 250, ttl: 4.0, size: 10, amount: 1, pierce: 999),
+    DragonSpear: WeaponDef(name: "Dragon Spear", desc: "Lunges in the faced direction, passes through enemies",
+      cooldown: 1.35, damage: 10, speed: 0, ttl: 0.15, size: 100, amount: 1, pierce: 999,
+      sprite: SprSpear, motion: Lunge, anim: AnimThrust, spin: 0, drawScale: 1.0),
+    ArcaneStaff: WeaponDef(name: "Arcane Staff", desc: "Fires at the nearest enemy",
+      cooldown: 1.2, damage: 10, speed: 300, ttl: 2.5, size: 10, amount: 1, pierce: 0,
+      sprite: SprBolt, motion: Homing, anim: AnimCast, spin: 0, drawScale: 2.4),
+    Longbow: WeaponDef(name: "Longbow", desc: "Arrows fly in the faced direction",
+      cooldown: 1.0, damage: 6.5, speed: 450, ttl: 1.5, size: 8, amount: 1, pierce: 1,
+      sprite: SprArrow, motion: Straight, anim: AnimShoot, spin: 0, drawScale: 3.5),
+    WarAxe: WeaponDef(name: "War Axe", desc: "High damage, arcs overhead",
+      cooldown: 4.0, damage: 20, speed: 300, ttl: 2.5, size: 20, amount: 1, pierce: 3,
+      sprite: SprAxe, motion: Arc, anim: AnimSlash, spin: 10, drawScale: 1.4),
+    Boomerang: WeaponDef(name: "Boomerang", desc: "Flies out and comes back, hits both ways",
+      cooldown: 3.0, damage: 10, speed: 320, ttl: 3.0, size: 10, amount: 1, pierce: 999,
+      sprite: SprBoomerang, motion: Return, anim: NoAnim, spin: 12, drawScale: 1.6),
     Garlic: WeaponDef(name: "Garlic", desc: "Damages nearby enemies",
-      cooldown: 1.3, damage: 5, speed: 0, ttl: 0.05, size: 80, amount: 1, pierce: 999),
-    KingBible: WeaponDef(name: "King Bible", desc: "Orbits around the character",
-      cooldown: 3.0, damage: 10, speed: 2.5, ttl: 3.0, size: 14, amount: 1, pierce: 999),
+      cooldown: 1.3, damage: 5, speed: 0, ttl: 0.05, size: 80, amount: 1, pierce: 999,
+      sprite: SprAura, motion: Aura, anim: NoAnim, spin: 0, drawScale: 2.0),
+    RoundShield: WeaponDef(name: "Round Shield", desc: "Orbits around the character",
+      cooldown: 3.0, damage: 10, speed: 2.5, ttl: 3.0, size: 14, amount: 1, pierce: 999,
+      sprite: SprShield, motion: Orbit, anim: NoAnim, spin: 0, drawScale: 1.6),
   ]
 
   weaponUpgrades*: array[WeaponKind, array[2 .. maxWeaponLevel, WeaponUpgrade]] = [
-    Whip: [
+    DragonSpear: [
       2: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
       3: WeaponUpgrade(damage: 5, text: "Base damage up by 5"),
       4: WeaponUpgrade(damage: 5, size: 10, text: "Damage +5, area +10%"),
@@ -142,7 +216,7 @@ const
       6: WeaponUpgrade(damage: 5, size: 10, text: "Damage +5, area +10%"),
       7: WeaponUpgrade(damage: 5, text: "Base damage up by 5"),
       8: WeaponUpgrade(damage: 5, text: "Base damage up by 5")],
-    MagicWand: [
+    ArcaneStaff: [
       2: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
       3: WeaponUpgrade(cooldown: -0.2, text: "Cooldown reduced by 0.2s"),
       4: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
@@ -150,7 +224,7 @@ const
       6: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
       7: WeaponUpgrade(pierce: 1, text: "Passes through 1 more enemy"),
       8: WeaponUpgrade(damage: 10, text: "Base damage up by 10")],
-    Knife: [
+    Longbow: [
       2: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
       3: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
       4: WeaponUpgrade(damage: 5, text: "Base damage up by 5"),
@@ -158,7 +232,7 @@ const
       6: WeaponUpgrade(pierce: 1, text: "Passes through 1 more enemy"),
       7: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
       8: WeaponUpgrade(damage: 5, text: "Base damage up by 5")],
-    Axe: [
+    WarAxe: [
       2: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
       3: WeaponUpgrade(damage: 20, text: "Base damage up by 20"),
       4: WeaponUpgrade(pierce: 2, text: "Passes through 2 more enemies"),
@@ -166,7 +240,7 @@ const
       6: WeaponUpgrade(damage: 20, text: "Base damage up by 20"),
       7: WeaponUpgrade(pierce: 2, text: "Passes through 2 more enemies"),
       8: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile")],
-    Runetracer: [
+    Boomerang: [
       2: WeaponUpgrade(speed: 50, damage: 5, text: "Speed +50, damage +5"),
       3: WeaponUpgrade(ttl: 0.3, text: "Lasts 0.3s longer"),
       4: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
@@ -182,7 +256,7 @@ const
       6: WeaponUpgrade(size: 20, damage: 1, text: "Area +20, damage +1"),
       7: WeaponUpgrade(cooldown: -0.1, damage: 1, text: "Faster pulse, damage +1"),
       8: WeaponUpgrade(size: 20, damage: 1, text: "Area +20, damage +1")],
-    KingBible: [
+    RoundShield: [
       2: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
       3: WeaponUpgrade(speed: 0.3, size: 3, text: "Spins faster, bigger"),
       4: WeaponUpgrade(ttl: 0.5, text: "Lasts 0.5s longer"),
@@ -193,24 +267,24 @@ const
   ]
 
   passiveDefs*: array[PassiveKind, PassiveDef] = [
-    Spinach: PassiveDef(name: "Spinach", desc: "+10% damage per level"),
-    Armor: PassiveDef(name: "Armor", desc: "-1 incoming damage per level"),
-    HollowHeart: PassiveDef(name: "Hollow Heart", desc: "+20% max health per level"),
-    Pummarola: PassiveDef(name: "Pummarola", desc: "+0.2 HP/s regen per level"),
-    EmptyTome: PassiveDef(name: "Empty Tome", desc: "-8% cooldown per level"),
-    Wings: PassiveDef(name: "Wings", desc: "+10% move speed per level"),
-    Attractorb: PassiveDef(name: "Attractorb", desc: "+50% pickup range per level"),
+    Spinach: PassiveDef(name: "Spinach", desc: "+10% damage per level", sprite: SprSpinach),
+    Armor: PassiveDef(name: "Armor", desc: "-1 incoming damage per level", sprite: SprArmor),
+    HollowHeart: PassiveDef(name: "Hollow Heart", desc: "+20% max health per level", sprite: SprHollowHeart),
+    Pummarola: PassiveDef(name: "Pummarola", desc: "+0.2 HP/s regen per level", sprite: SprPummarola),
+    EmptyTome: PassiveDef(name: "Empty Tome", desc: "-8% cooldown per level", sprite: SprEmptyTome),
+    Wings: PassiveDef(name: "Wings", desc: "+10% move speed per level", sprite: SprWings),
+    Attractorb: PassiveDef(name: "Attractorb", desc: "+50% pickup range per level", sprite: SprAttractorb),
   ]
 
   enemyDefs*: array[EnemyKind, EnemyDef] = [
-    Bat: EnemyDef(hp: 1, speed: 90, damage: 3, size: 32, gem: GemBlue, sheet: "bat", boss: false),
-    Zombie: EnemyDef(hp: 3, speed: 55, damage: 4, size: 64, gem: GemBlue, sheet: "zombie", boss: false),
-    Skeleton: EnemyDef(hp: 8, speed: 70, damage: 5, size: 64, gem: GemGreen, sheet: "skeleton", boss: false),
-    Mudman: EnemyDef(hp: 15, speed: 45, damage: 6, size: 64, gem: GemGreen, sheet: "mudman", boss: false),
-    Ghost: EnemyDef(hp: 20, speed: 80, damage: 6, size: 64, gem: GemGreen, sheet: "ghost", boss: false),
-    Parakeet: EnemyDef(hp: 150, speed: 100, damage: 12, size: 150, gem: GemRed, sheet: "parakeet", boss: true),
-    Koalio: EnemyDef(hp: 400, speed: 60, damage: 15, size: 104, gem: GemRed, sheet: "koalio", boss: true),
-    Reaper: EnemyDef(hp: 65535, speed: 200, damage: 999, size: 192, gem: GemRed, sheet: "reaper", boss: true),
+    Bat: EnemyDef(hp: 1, speed: 90, damage: 3, size: 32, gem: GemBlue, sheet: ShBat, boss: false),
+    Zombie: EnemyDef(hp: 3, speed: 55, damage: 4, size: 64, gem: GemBlue, sheet: ShZombie, boss: false),
+    Skeleton: EnemyDef(hp: 8, speed: 70, damage: 5, size: 64, gem: GemGreen, sheet: ShSkeleton, boss: false),
+    Mudman: EnemyDef(hp: 15, speed: 45, damage: 6, size: 64, gem: GemGreen, sheet: ShMudman, boss: false),
+    Ghost: EnemyDef(hp: 20, speed: 80, damage: 6, size: 64, gem: GemGreen, sheet: ShGhost, boss: false),
+    Parakeet: EnemyDef(hp: 150, speed: 100, damage: 12, size: 150, gem: GemRed, sheet: ShParakeet, boss: true),
+    Koalio: EnemyDef(hp: 400, speed: 60, damage: 15, size: 104, gem: GemRed, sheet: ShKoalio, boss: true),
+    Reaper: EnemyDef(hp: 65535, speed: 200, damage: 999, size: 192, gem: GemRed, sheet: ShReaper, boss: true),
   ]
 
   waves*: seq[Wave] = @[
@@ -235,6 +309,59 @@ const
     BossSpawn(minute: 25, kind: Koalio, count: 2),
     BossSpawn(minute: 30, kind: Reaper, count: 1),
   ]
+
+# ---------------------------------------------------------------- atlas (assets/items.txt)
+
+proc spriteManifestName(s: Sprite): string =
+  ## SprGemBlue -> "gemblue"
+  toLowerAscii(($s)[3 .. ^1])
+
+proc parseAtlas(manifest: string): tuple[size: (int, int), rects: array[Sprite, Rect]] =
+  var seen: set[Sprite]
+  for line in manifest.splitLines:
+    let f = line.splitWhitespace
+    if f.len == 0:
+      continue
+    if f[0] == "size":
+      result.size = (parseInt(f[1]), parseInt(f[2]))
+      continue
+    doAssert f.len == 5, "bad items.txt line: " & line
+    var found = false
+    for s in Sprite:
+      if spriteManifestName(s) == f[0]:
+        result.rects[s] = (parseInt(f[1]), parseInt(f[2]), parseInt(f[3]), parseInt(f[4]))
+        seen.incl s
+        found = true
+    doAssert found, "items.txt names an unknown sprite: " & f[0]
+  for s in Sprite:
+    doAssert s in seen, "sprite missing from items.txt: " & spriteManifestName(s) & " (run `nimble assets`)"
+
+const
+  atlasParsed = parseAtlas(staticRead("assets/items.txt"))
+  atlasSize* = atlasParsed.size
+  atlas* = atlasParsed.rects
+
+proc pickupSprite*(kind: PickupKind): Sprite =
+  case kind
+  of GemBlue: SprGemBlue
+  of GemGreen: SprGemGreen
+  of GemRed: SprGemRed
+  of Chicken: SprChicken
+  of Coin: SprCoin
+  of Chest: SprChest
+  of Vacuum: SprVacuum
+
+proc animActive*(anim: BodyAnim, start, now: float): bool =
+  ## Compares against the end time rather than the elapsed time, so the
+  ## animation ends exactly at `start + secs` in floating point.
+  anim != NoAnim and now < start + animDefs[anim].secs
+
+proc animFrame*(anim: BodyAnim, start, now: float): int =
+  ## Column of the attack sheet for the elapsed time, clamped to the last frame.
+  let a = animDefs[anim]
+  if a.secs <= 0:
+    return 0
+  min(a.frames - 1, max(0, int((now - start) / a.secs * float(a.frames))))
 
 proc weaponAt*(kind: WeaponKind, level: int): WeaponDef =
   ## Base definition plus every upgrade from level 2 up to `level`.

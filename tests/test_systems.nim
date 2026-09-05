@@ -9,7 +9,7 @@ type
 proc enemy(id: int, x, y: float, kind = Bat): E =
   (id, kind, (x, y), enemyDefs[kind].hp, enemyDefs[kind].damage, enemyDefs[kind].size)
 
-proc proj(id: int, x, y: float, kind = MagicWand, pierce = 0, size = 10.0): P =
+proc proj(id: int, x, y: float, kind = ArcaneStaff, pierce = 0, size = 10.0): P =
   (id, kind, (x, y), size, 10.0, pierce, initHashSet[int](), 1.0)
 
 suite "systems":
@@ -30,8 +30,8 @@ suite "systems":
     check hits.len == 1
     check hits[0].enemyId != 10
 
-  test "whip uses a wide horizontal box":
-    let hits = collide([proj(1, 0, 0, kind = Whip, pierce = 999, size = 120)], [enemy(10, 50, 0), enemy(11, 0, 80)])
+  test "dragon spear uses a wide horizontal box":
+    let hits = collide([proj(1, 0, 0, kind = DragonSpear, pierce = 999, size = 120)], [enemy(10, 50, 0), enemy(11, 0, 80)])
     check hits.len == 1
     check hits[0].enemyId == 10
 
@@ -68,33 +68,33 @@ suite "systems":
 
   test "attack plans":
     let st = defaultStats
-    check attackPlan(Whip, 1, st, 0, 0, Right, false, 0, 0).len == 1
-    check attackPlan(Whip, 2, st, 0, 0, Right, false, 0, 0).len == 2
-    let wand = attackPlan(MagicWand, 1, st, 0, 0, Down, true, 100, 0)
-    check wand.len == 1
-    check wand[0].vx > 0 and abs(wand[0].vy) < 1e-6
-    let knife = attackPlan(Knife, 1, st, 0, 0, Up, false, 0, 0)
-    check knife[0].vy < 0
-    let bible = attackPlan(KingBible, 2, st, 0, 0, Up, false, 0, 0)
-    check bible.len == 2
-    check abs(bible[1].angle - PI) < 1e-9
+    check attackPlan(DragonSpear, 1, st, 0, 0, Right, false, 0, 0).len == 1
+    check attackPlan(DragonSpear, 2, st, 0, 0, Right, false, 0, 0).len == 2
+    let staff = attackPlan(ArcaneStaff, 1, st, 0, 0, Down, true, 100, 0)
+    check staff.len == 1
+    check staff[0].vx > 0 and abs(staff[0].vy) < 1e-6
+    let arrow = attackPlan(Longbow, 1, st, 0, 0, Up, false, 0, 0)
+    check arrow[0].vy < 0
+    let shield = attackPlan(RoundShield, 2, st, 0, 0, Up, false, 0, 0)
+    check shield.len == 2
+    check abs(shield[1].angle - PI) < 1e-9
     var strong = defaultStats
     strong.might = 2.0
     strong.amount = 1
-    let plan = attackPlan(Knife, 1, strong, 0, 0, Right, false, 0, 0)
+    let plan = attackPlan(Longbow, 1, strong, 0, 0, Right, false, 0, 0)
     check plan.len == 2
     check plan[0].damage == 13.0
 
   test "choices respect slots and max levels":
     randomize(2)
-    let c1 = generateChoices([(Whip, 1)], [])
+    let c1 = generateChoices([(DragonSpear, 1)], [])
     check c1.len == 3
-    let maxed = generateChoices([(Whip, maxWeaponLevel), (Knife, maxWeaponLevel), (Axe, maxWeaponLevel), (Garlic, maxWeaponLevel), (MagicWand, maxWeaponLevel), (Runetracer, maxWeaponLevel)],
+    let maxed = generateChoices([(DragonSpear, maxWeaponLevel), (Longbow, maxWeaponLevel), (WarAxe, maxWeaponLevel), (Garlic, maxWeaponLevel), (ArcaneStaff, maxWeaponLevel), (Boomerang, maxWeaponLevel)],
                                 [(Spinach, maxPassiveLevel), (Armor, maxPassiveLevel), (HollowHeart, maxPassiveLevel), (Pummarola, maxPassiveLevel), (EmptyTome, maxPassiveLevel), (Wings, maxPassiveLevel)])
     check maxed.len == 2
     check maxed[0].kind == BonusGold
     for i in 0 ..< 50:
-      for c in generateChoices([(Whip, 3)], [(Spinach, 1)]):
+      for c in generateChoices([(DragonSpear, 3)], [(Spinach, 1)]):
         if c.kind == UpgradeWeapon: check c.level == 4
         if c.kind == UpgradePassive: check c.level == 2
         check c.title.len > 0
