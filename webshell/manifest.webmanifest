@@ -1,0 +1,15 @@
+{
+  "name": "Parasurvivors",
+  "short_name": "Parasurvivors",
+  "description": "A Vampire Survivors demo clone on the paranim stack",
+  "start_url": ".",
+  "scope": ".",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#29331f",
+  "theme_color": "#29331f",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

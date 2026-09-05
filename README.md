@@ -66,9 +66,41 @@ Any other host works the same way -- upload the contents of `web/` and hand out 
 requirement is that `.wasm` is served as `application/wasm`; GitHub Pages, Netlify, Cloudflare
 Pages and itch.io all do.
 
+#### On a phone
+
+The page is playable on a touchscreen without a keyboard. Three things make that work, all of them
+worth knowing if you change them:
+
+- **Input.** The touch layer in `shell_minimal.html` calls `Module._psKeyDown`/`_psKeyUp` with the
+  GLFW key codes from `src/data.nim`. Those two entry points are `EMSCRIPTEN_KEEPALIVE` procs in
+  `src/parasurvivors.nim`, so no `-s EXPORTED_FUNCTIONS` list is needed. It deliberately does *not*
+  synthesise `KeyboardEvent`s: emscripten's GLFW shim reads the legacy `event.keyCode`, which is not
+  a standard member of `KeyboardEventInit`. Movement is eight-way in the rules anyway
+  (`moveMe` in `src/rules.nim`), so a digital stick loses nothing.
+- **Field of view.** `zoomFor` in `src/data.nim` scales world units per pixel by window height, so a
+  short screen still sees `referenceHeight` (768) world units top to bottom. Without it a phone in
+  landscape would see less than half the world a desktop does, and since enemies spawn just offscreen
+  that is a harder game, not a smaller one. Zoom is capped at 1.0, so desktop windows are untouched --
+  the character-select screenshot above is pixel-identical before and after. Lower `referenceHeight`
+  if the sprites feel too small on a real device; that trades field of view for size.
+- **Pixel density.** The shell sizes the framebuffer at `devicePixelRatio`, capped at 2. The wasm
+  divides that back out via `emscripten_get_element_css_size`, so the world stays laid out in CSS
+  pixels while the sprites and text render sharp.
+
+![The touch build on an emulated phone, thumbstick under the finger](docs/screenshots/web-touch.png)
+
+`tools/touch_test.js` exercises all of it against an emulated 740x360 phone at 3x density:
+
+```sh
+python3 -m http.server 8000 --directory web &
+chromium --headless=new --disable-gpu --enable-unsafe-swiftshader --remote-debugging-port=9222 about:blank &
+node tools/touch_test.js http://localhost:8000/
+```
+
 Adding `-d:singlefile` base64-inlines the wasm into the page, so `web/index.html` becomes one
 self-contained 3 MB file that needs no host at all -- mail it, and it also runs straight off
-`file://`:
+`file://`. The manifest and icons are the one part it cannot fold in, so home-screen install needs
+the hosted version:
 
 ```sh
 nimble build -d:release -d:emscripten -d:noaudio -d:singlefile
@@ -88,6 +120,11 @@ xdg-open web/index.html
 | `F3` | toggle the fps overlay |
 
 Weapons fire by themselves. Your only job is to not get touched.
+
+On a touchscreen, put a thumb anywhere and a stick appears under it; drag to move. Tap without
+dragging to confirm a menu choice, flick the stick up or down to move the menu cursor, and use the
+two buttons in the top-right corner to pause and to go fullscreen. Weapons still fire themselves, so
+there is nothing else to press.
 
 `F3` puts `fps`, frame ms, sim ms and the live enemy count in the bottom-right corner, in every
 build including the web one. Both timings are smoothed over about half a second. `sim` is the tick's
@@ -201,7 +238,11 @@ cd tests && nim c -r -d:release --hints:off --outdir:../tmp bench.nim   # one ti
 - `src/parasurvivors.nim` — GLFW window and main loop; under `-d:emscripten` the loop is handed to
   `emscripten_set_main_loop` and the canvas size is polled each frame.
 - `shell_minimal.html` — the page the web build is embedded in (parakeet's, plus a `keydown` handler
-  that stops arrows and Space from scrolling).
+  that stops arrows and Space from scrolling, and the touch controls).
+- `webshell/` — `manifest.webmanifest` and the two icons, copied into `web/` by `config.nims` so the
+  page can be added to a phone's home screen.
+- `tools/touch_test.js` — drives the touch controls through the Chrome DevTools Protocol on an
+  emulated phone. Node 22+, no dependencies.
 - `patches/pararules/engine.nim` — pararules 1.4.0 with a one-line fix (`patches/pararules/engine.diff`),
   swapped in via `patchFile` in `config.nims`. Without it `fireRules` copies a rule's whole match table
   once per queued `then`, which is O(N²) per tick with N per-entity rule firings. Upstream PR:

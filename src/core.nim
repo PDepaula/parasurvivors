@@ -27,8 +27,9 @@ proc onWindowResize*(windowWidth, windowHeight, worldWidth, worldHeight: int) =
     return
   session.insert(Global, WindowWidth, windowWidth)
   session.insert(Global, WindowHeight, windowHeight)
-  session.insert(Global, WorldWidth, float(worldWidth) / zoom)
-  session.insert(Global, WorldHeight, float(worldHeight) / zoom)
+  let z = zoomFor(worldHeight)
+  session.insert(Global, WorldWidth, float(worldWidth) / z)
+  session.insert(Global, WorldHeight, float(worldHeight) / z)
 
 proc init*(game: var Game) =
   doAssert glInit()

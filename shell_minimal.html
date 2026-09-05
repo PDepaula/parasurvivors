@@ -3,11 +3,23 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <!-- Without this a phone lays the page out at 980px and zooms out; viewport-fit lets
+         the canvas run under the notch while the buttons stay inside the safe area. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#29331f">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.webmanifest">
     <title>Parasurvivors</title>
     <style>
       html, body {
         padding: 0px;
         margin: 0px;
+        background: #29331f;
+        overflow: hidden;
+        /* stop pull-to-refresh and rubber-banding while a thumb is dragging */
+        overscroll-behavior: none;
       }
 
       canvas {
@@ -18,18 +30,80 @@
         height: 100%;
         overflow: hidden;
         display: block;
+        /* the canvas handles its own gestures: no scroll, no pinch, no double-tap zoom */
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
       }
+
+      /* ---- touch controls. Hidden until a touch actually happens, so a desktop
+             visitor never sees them and a phone gets them without a device sniff. ---- */
+      #touch {
+        position: absolute;
+        inset: 0;
+        display: none;
+        touch-action: none;
+      }
+      body.touch #touch { display: block; }
+
+      #stick, #knob {
+        position: absolute;
+        border-radius: 50%;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.12s;
+      }
+      #stick {
+        width: 110px; height: 110px;
+        margin: -55px 0 0 -55px;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        background: rgba(0, 0, 0, 0.18);
+      }
+      #knob {
+        width: 46px; height: 46px;
+        margin: -23px 0 0 -23px;
+        background: rgba(255, 255, 255, 0.45);
+      }
+      body.dragging #stick, body.dragging #knob { opacity: 1; }
+
+      .btn {
+        position: absolute;
+        top: calc(env(safe-area-inset-top, 0px) + 8px);
+        width: 44px; height: 44px;
+        border: 0;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.35);
+        color: #fff;
+        font: 20px/44px system-ui, sans-serif;
+        text-align: center;
+        padding: 0;
+        touch-action: manipulation;
+      }
+      #pause { right: calc(env(safe-area-inset-right, 0px) + 8px); }
+      #full { right: calc(env(safe-area-inset-right, 0px) + 60px); }
     </style>
   </head>
   <body>
 
     <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
 
+    <div id="touch">
+      <div id="stick"></div>
+      <div id="knob"></div>
+      <button id="full" class="btn" aria-label="Fullscreen">&#9974;</button>
+      <button id="pause" class="btn" aria-label="Pause">II</button>
+    </div>
+
     <script type='text/javascript'>
       var canvas = document.getElementById('canvas');
       window.onresize = function() {
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
+        // Render at the device's pixel density (capped at 2 -- a 3x phone costs 2.25x the
+        // fill for no visible gain). The wasm divides this back out via the canvas's CSS
+        // size, so the world stays laid out in CSS pixels.
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(canvas.clientWidth * dpr);
+        canvas.height = Math.round(canvas.clientHeight * dpr);
       };
       var Module = {
         preRun: [],
@@ -92,7 +166,122 @@
             e.preventDefault();
         }
       }, false);
+    </script>
 
+    <script type='text/javascript'>
+      // ---------------------------------------------------------------- touch controls
+      // The game reads a set of held keys and normalises it into an eight-way direction
+      // (see moveMe in src/rules.nim), so a thumbstick loses nothing by being digital.
+      // Keys go straight into the session through the two EMSCRIPTEN_KEEPALIVE entry
+      // points in src/parasurvivors.nim rather than through synthetic KeyboardEvents:
+      // emscripten's GLFW shim reads the legacy event.keyCode, which is not a standard
+      // part of KeyboardEventInit.
+      (function() {
+        var GLFW = { right: 262, left: 263, down: 264, up: 265, enter: 257, esc: 256 };
+        // Eight compass points, starting at "east" and going clockwise in screen space
+        // (y grows downward), one per 45 degrees of stick travel.
+        var OCTANTS = [
+          [GLFW.right], [GLFW.right, GLFW.down], [GLFW.down], [GLFW.left, GLFW.down],
+          [GLFW.left], [GLFW.left, GLFW.up], [GLFW.up], [GLFW.right, GLFW.up]
+        ];
+        var DEADZONE = 18;  // css px of travel before the stick reads as a direction
+        var RADIUS = 52;    // css px at which the knob stops following the thumb
+        var TAP_MS = 350;   // a touch shorter than this, inside the deadzone, is a tap
+
+        var stick = document.getElementById('stick');
+        var knob = document.getElementById('knob');
+        var held = [];
+        var drag = null;
+
+        function send(fn, key) {
+          if (typeof Module !== 'undefined' && Module[fn]) Module[fn](key);
+        }
+
+        function hold(keys) {
+          for (var i = 0; i < held.length; i++) {
+            if (keys.indexOf(held[i]) < 0) send('_psKeyUp', held[i]);
+          }
+          for (var j = 0; j < keys.length; j++) {
+            if (held.indexOf(keys[j]) < 0) send('_psKeyDown', keys[j]);
+          }
+          held = keys;
+          window.__psHeld = held; // read by tools/touch_test.js
+        }
+
+        function pulse(key) {
+          send('_psKeyDown', key);
+          setTimeout(function() { send('_psKeyUp', key); }, 60);
+        }
+
+        // Exported so the direction mapping can be tested without a browser.
+        function directionFor(dx, dy) {
+          if (Math.sqrt(dx * dx + dy * dy) < DEADZONE) return [];
+          var octant = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
+          return OCTANTS[((octant % 8) + 8) % 8];
+        }
+        window.__psDirectionFor = directionFor;
+
+        function place(el, x, y) {
+          el.style.left = x + 'px';
+          el.style.top = y + 'px';
+        }
+
+        function onDown(e) {
+          if (e.pointerType === 'mouse') return;
+          document.body.classList.add('touch');
+          if (drag !== null) return;
+          drag = { id: e.pointerId, x: e.clientX, y: e.clientY, at: Date.now(), moved: 0 };
+          document.body.classList.add('dragging');
+          place(stick, drag.x, drag.y);
+          place(knob, drag.x, drag.y);
+          e.preventDefault();
+        }
+
+        function onMove(e) {
+          if (!drag || e.pointerId !== drag.id) return;
+          var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+          var len = Math.sqrt(dx * dx + dy * dy);
+          drag.moved = Math.max(drag.moved, len);
+          var scale = len > RADIUS ? RADIUS / len : 1;
+          place(knob, drag.x + dx * scale, drag.y + dy * scale);
+          hold(directionFor(dx, dy));
+          e.preventDefault();
+        }
+
+        function onUp(e) {
+          if (!drag || e.pointerId !== drag.id) return;
+          var tap = drag.moved < DEADZONE && Date.now() - drag.at < TAP_MS;
+          drag = null;
+          document.body.classList.remove('dragging');
+          hold([]);
+          // A tap confirms: it is Enter on the title, the character select and a level-up.
+          if (tap) pulse(GLFW.enter);
+        }
+
+        var layer = document.getElementById('touch');
+        // Listen on the window so a thumb that starts on the canvas keeps steering after
+        // it slides over the buttons, and so the first touch reveals the controls.
+        window.addEventListener('pointerdown', onDown, { passive: false });
+        window.addEventListener('pointermove', onMove, { passive: false });
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
+
+        document.getElementById('pause').addEventListener('click', function(e) {
+          e.stopPropagation();
+          pulse(GLFW.esc);
+        });
+        document.getElementById('full').addEventListener('click', function(e) {
+          e.stopPropagation();
+          // iOS Safari has no Fullscreen API outside video; there, "Add to Home Screen"
+          // is what drops the browser chrome (hence apple-mobile-web-app-capable above).
+          if (document.fullscreenElement) document.exitFullscreen();
+          else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+        });
+        // The buttons must not also start the stick under the thumb.
+        layer.querySelectorAll('.btn').forEach(function(b) {
+          b.addEventListener('pointerdown', function(e) { e.stopPropagation(); });
+        });
+      })();
     </script>
     {{{ SCRIPT }}}
   </body>
