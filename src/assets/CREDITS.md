@@ -16,10 +16,14 @@ repository, if you reuse the art.
 
 | composed file | LPC layers (bottom to top) |
 |---|---|
-| `otto.png` | body/bodies/male, legs/pants/male, torso/clothes/longsleeve/male, head/heads/human/male, hair/bedhead |
-| `imma.png` | body/bodies/female, legs/skirts/plain/thin, torso/clothes/longsleeve/female, head/heads/human/female, hair/bob |
-| `lina.png` | body/bodies/female, legs/pantaloons/thin, torso/clothes/shortsleeve/female, head/heads/human/female, hair/bangs |
-| `gino.png` | body/bodies/male, legs/pants/male, torso/clothes/shortsleeve/male, head/heads/human/male, hair/balding |
+| `otto.png` | weapon/polearm/dragonspear/background/walk, body/bodies/male, legs/pants/male, torso/clothes/longsleeve/male, head/heads/human/male, hair/bedhead, weapon/polearm/dragonspear/foreground/walk |
+| `otto_attack.png` | the same layers on the thrust animation, with weapon/polearm/dragonspear/{background,foreground}/thrust |
+| `imma.png` | weapon/magic/simple/background/walk, body/bodies/female, legs/skirts/plain/thin, torso/clothes/longsleeve/female, head/heads/human/female, hair/bob, weapon/magic/simple/foreground/walk |
+| `imma_attack.png` | the same layers on the spellcast animation, with weapon/magic/simple/{background,foreground}/spellcast |
+| `lina.png` | weapon/blunt/waraxe/behind/walk, body/bodies/female, legs/pantaloons/thin, torso/clothes/shortsleeve/female, head/heads/human/female, hair/bangs, weapon/blunt/waraxe/walk |
+| `lina_attack.png` | the same layers on the slash animation, with weapon/blunt/waraxe/attack_slash (behind and in front) |
+| `gino.png` | weapon/ranged/bow/normal/walk/background, body/bodies/male, legs/pants/male, torso/clothes/shortsleeve/male, head/heads/human/male, hair/balding, weapon/ranged/bow/normal/walk/foreground |
+| `gino_attack.png` | the same layers on the shoot animation, with weapon/ranged/bow/normal/universal/{background,foreground}/shoot and weapon/ranged/bow/arrow/shoot |
 | `skeleton.png` | body/bodies/skeleton |
 | `zombie.png` | body/bodies/zombie |
 | `reaper.png` | body/bodies/skeleton, hat/cloth/hood, then darkened |
@@ -42,13 +46,29 @@ The composed and recoloured PNGs are derivative works and are distributed under
 > Inboxninja, kcilds/Rocetti/Eredah, Napsio (Vitruvian Studio), The Foreman, AntumDeluge, Ahmad3366.
 > Per-file details: CREDITS-lpc.csv.
 
-## LPC Base Assets (`bat.png`, `grass.png`)
+## LPC Base Assets (`bat.png`, `grass.png`, the chest icon in `items.png`)
 
 Source: [Liberated Pixel Cup (LPC) Base Assets](https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles),
 offered under CC-BY-SA 3.0, GPL 3.0 and OGA-BY 3.0. Full credits in `CREDITS-lpc-base.txt`.
 
 - `bat.png` (`sprites/monsters/bat.png`): Charles Sanchez (CharlesGabriel).
 - `grass.png` (`tiles/grass.png`): Lanea Zimmerman (Sharm).
+- the chest icon (`tiles/chests.png`): Lanea Zimmerman (Sharm).
+
+## Icon atlas (`items.png`)
+
+Weapon icons are single frames cut from the generator layers above (`weapon/polearm/dragonspear`,
+`weapon/ranged/bow/arrow`, `weapon/blunt/waraxe`, `shield/round`). The rest:
+
+- Reemax, "[LPC] Items and game effects" (https://opengameart.org/content/lpc-items-and-game-effects),
+  CC-BY-SA 3.0 / GPL 3.0 / GPL 2.0 - gems, coin, chicken, passive icons, boomerang, bolt, aura, spark,
+  vacuum burst. Full credits in `CREDITS-lpc-items.txt`.
+- bluecarrot16, Daniel Eddeland, Joshua Taylor, Richard Kettering et al., "[LPC] Food"
+  (https://opengameart.org/content/lpc-food), CC-BY-SA 3.0 / GPL 3.0 - garlic. Full credits in
+  `CREDITS-lpc-food.txt`.
+- The chest is `tiles/chests.png` from the LPC Base Assets (Lanea Zimmerman).
+
+`items.txt` records where each icon sits in the atlas; it is generated alongside the PNG.
 
 ## `koalio.png`
 

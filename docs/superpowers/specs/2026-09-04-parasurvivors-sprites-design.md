@@ -1,132 +1,231 @@
-# Parasurvivors — Sprites for Everything (LPC weapons, pickups, UI icons)
+# Parasurvivors — LPC weapons, starter attack animations, sprites for everything
 
-Date: 2026-09-04
+Date: 2026-09-04 (revised the same day: added starter attack animations, Lina → War Axe,
+spear lunge + returning boomerang, data-driven weapon table, README refresh)
 Status: approved in brainstorming, ready for planning
 Builds on: `2026-09-04-parasurvivors-design.md` (implemented on `main`)
 
 ## 1. Goal
 
-Replace every coloured quad with a sprite and give weapons Liberated Pixel Cup art:
+Drop the Vampire Survivors weapon names and every coloured quad. Weapons get Liberated Pixel Cup
+(LPC) art, each survivor visibly holds and *uses* their starting weapon, pickups and UI get icons,
+and the weapon table becomes data-driven so a new weapon is a table row rather than six `case`
+branches.
 
-- Projectiles and weapon effects use LPC generator weapon layers (dragon spear, staff, bow + arrow,
-  war axe, boomerang, round shield) cropped into standalone icons.
-- Pickups (gems, coin, chicken, chest, vacuum) and passives use icons from Reemax's
-  "[LPC] Items and game effects" and bluecarrot16's "[LPC] Food".
-- Each character visibly carries their starting weapon in the walk sheet.
-- Level-up cards and the HUD slot list show weapon/passive icons.
-- Weapons are renamed to match the art. Mechanics do not change.
+Decided in brainstorming (do not re-litigate):
 
-Decided in brainstorming (do not re-litigate): icons + held starter (no LPC attack animations);
-one script-built atlas with a text manifest; UI icons for weapons and passives.
+- Only the **starter** weapon animates the body. Everything else is auto-fire icons.
+- Lina's starter becomes **War Axe** (LPC has no throw animation for the boomerang). Her
+  "+20% projectile speed" perk stays: axe arc height scales with speed.
+- Two mechanics twists: Dragon Spear lunges in the faced direction (4-way, not horizontal-only);
+  Boomerang flies out and returns to the player (replaces the screen-edge bounce).
+- "Enemy projectiles" in the request meant the player's projectiles hitting enemies. Enemies get
+  no ranged attacks.
+- One script-built atlas with a text manifest; UI icons for weapons and passives; README refresh
+  is in scope.
 
-## 2. Weapon mapping
+## 2. Weapons
 
-| Old enum   | New enum      | Display name  | Projectile sprite                     | Held by starter |
-|------------|---------------|---------------|---------------------------------------|-----------------|
-| Whip       | DragonSpear   | Dragon Spear  | `spear` (dragonspear thrust, steel)   | Otto            |
-| MagicWand  | ArcaneStaff   | Arcane Staff  | `bolt` (effects.png blue orb)          | Imma (staff)    |
-| Knife      | Longbow       | Longbow       | `arrow` (bow/arrow shoot frame)        | Gino (bow)      |
-| Axe        | WarAxe        | War Axe       | `axe` (waraxe walk frame)              | —               |
-| Runetracer | Boomerang     | Boomerang     | `boomerang` (boomerang frame)          | — (Lina)        |
-| Garlic     | Garlic        | Garlic        | `aura` ring (effects.png) + `garlic` icon on player | — |
-| KingBible  | RoundShield   | Round Shield  | `shield` (round shield walk, brown)    | —               |
+| Enum          | Name          | Motion    | Projectile sprite       | Body anim (starter only)            |
+|---------------|---------------|-----------|-------------------------|-------------------------------------|
+| `DragonSpear` | Dragon Spear  | `Lunge`   | `spear`, rotated to dir | Otto: `AnimThrust`, 8 frames, 0.4 s |
+| `ArcaneStaff` | Arcane Staff  | `Homing`  | `bolt` (blue orb)       | Imma: `AnimCast`, 7 frames, 0.35 s  |
+| `Longbow`     | Longbow       | `Straight`| `arrow`, rotated        | Gino: `AnimShoot`, 13 frames, 0.5 s |
+| `WarAxe`      | War Axe       | `Arc`     | `axe`, spins 10 rad/s   | Lina: `AnimSlash`, 6 frames, 0.3 s  |
+| `Boomerang`   | Boomerang     | `Return`  | `boomerang`, spins 12 rad/s | none                            |
+| `RoundShield` | Round Shield  | `Orbit`   | `shield`                | none                                |
+| `Garlic`      | Garlic        | `Aura`    | `aura` ring α 0.35 + `garlic` icon above the player's head | none |
 
-Behaviour per kind (cooldowns, damage, motion in `moveProjectiles`, `attackPlan`) is unchanged; only
-`WeaponKind` identifiers, `weaponDefs[].name/desc`, and the sprite drawn change. Descriptions are
-rewritten to fit the art ("Thrusts horizontally, passes through enemies", "Fires at the nearest
-enemy", "Arrows fly in the faced direction", "High damage, arcs overhead", "Bounces around the
-screen", "Damages nearby enemies", "Orbits around the character").
+Descriptions: "Lunges in the faced direction, passes through enemies", "Fires at the nearest
+enemy", "Arrows fly in the faced direction", "High damage, arcs overhead", "Flies out and comes
+back, hits both ways", "Damages nearby enemies", "Orbits around the character".
 
-Assumption: "enemy projectiles" in the request refers to the player's projectiles; enemies have no
-ranged attacks in the base spec and none are added.
+Cooldowns are all ≥ 1 s, longer than any body animation, so animations never overlap (with Empty
+Tome at level 5, `cooldownMul = 0.6`, Gino's Longbow fires every 0.6 s against a 0.5 s shoot
+animation: still no overlap, 0.1 s margin).
 
-## 3. Sprite sources (all verified 2026-09-04)
+### 2.1 Motions (`systems.attackPlan` spawn pattern + `rules.moveProjectiles` step)
 
-| Sprite(s) | Source | File(s) | License |
-|---|---|---|---|
-| spear (icon), spear held layers | LPC generator `spritesheets/weapon/polearm/dragonspear/{foreground,background}/{thrust,walk}/steel.png` | thrust: 1536×768, 192 px frames; walk: 1664×512, 128 px frames | CC-BY-SA 3.0 / GPL 3.0 / OGA-BY 3.0 (rows in `CREDITS.csv` under `weapon/polearm/dragonspear`) |
-| staff held layers | `weapon/magic/simple/{foreground,background}/walk/simple.png` (576×256, 64 px) | | same |
-| shield | `shield/round/walk/brown.png` (576×256) | | same |
-| bow held layers | `weapon/ranged/bow/normal/walk/{foreground,background}/steel.png` (1664×512, 128 px) | | same |
-| arrow | `weapon/ranged/bow/arrow/shoot/arrow.png` (832×256, 64 px) | | same |
-| axe | `weapon/blunt/waraxe/walk/waraxe.png` (+ `behind/walk/waraxe.png`) | | same |
-| boomerang | `weapon/ranged/boomerang/boomerang.png` (1152×768, 192 px) | | same |
-| gem_blue, gem_green, gem_red, coin, chicken, tome, potion, platemail, boots, leaf, apple, orb | Reemax "[LPC] Items and game effects", `ItemsAndEffects/items1.png` (512×512, 32 px cells) — https://opengameart.org/content/lpc-items-and-game-effects | `ItemsAndEffects_0.zip` | CC-BY-SA 3.0 / GPL 3.0 / GPL 2.0 |
-| aura, vacuum (star burst) | same pack, `effects.png` (640×400) | | same |
-| garlic | bluecarrot16 et al. "[LPC] Food" v2, `fruits-veggies.png` (1024×1536, 32 px cells) — https://opengameart.org/content/lpc-food | `lpc-food-v2.zip` | CC-BY-SA 3.0 / GPL 3.0 |
-| chest | LPC Base Assets `tiles/chests.png` (64×96, top-left 32×32 = closed chest) | already downloaded | CC-BY-SA 3.0 / GPL 3.0 |
+Unchanged from today unless listed: `Homing` (was MagicWand), `Straight` (Knife), `Arc` (Axe),
+`Orbit` (KingBible), `Aura` (Garlic).
 
-Items sheet cells (col, row, 32 px): coin (9,0), gem_red (12,3), gem_blue (12,4), gem_green (12,5),
-gem_white (15,1), chicken (8,6), tome (0,9), potion_red (3,5), platemail (0,1), boots (13,3),
-leaf (8,4), apple (8,5), orb (14,5). Effects: aura ring ≈ cell (16,3) of 32 px cells, star burst at
-≈ (0,7); garlic ≈ cell (23,15) of the food sheet. The script uses these numbers; the plan's visual
-check step confirms each before commit.
+**Lunge** (replaces Whip). Volley `i` direction: `i = 0` facing, `1` opposite, `2` and `3` the two
+perpendiculars, then repeat. Hitbox is a rectangle of length `size` and half-width
+`lungeHalfWidth = 24` along that direction, centred `size / 2` from the player. Stationary for its
+`ttl`. `Angle` fact holds the direction so render rotates the spear. `hitsEnemy` tests the rotated
+rectangle (project the enemy offset onto the direction and its normal).
 
-## 4. Asset pipeline
+**Return** (replaces Runetracer). Spawned at the player with velocity `speed` in a random direction
+(as now). Each tick velocity gains `boomerangAccel · dt` (constant, 300 px/s²) toward the player's
+current position, so at base speed it turns around ≈ 170 px out after ≈ 1.1 s and comes back even if
+the player moved; speed upgrades push it farther, ttl upgrades give it the slack to return. New projectile fact `Turned: bool`; when the velocity first points toward the player
+(`dot(vel, player − pos) > 0`) set `Turned = true` and clear `HitIds` so the same enemies can be
+hit on the way back. Retract when `Turned` and within `boomerangCatchRadius = 20` px of the player,
+or when `ttl ≤ 0`.
 
-`tools/fetch_assets.sh` gains an atlas stage after the character/enemy stage:
+### 2.2 Weapon table rows
 
-1. Download the layer PNGs and the two zips into the temp dir (curl, unzip).
-2. Weapon icons: `magick bg fg +repage -background none -layers flatten -crop FxF+X+Y +repage -trim +repage`
-   for the chosen frame (fixed row/col per weapon, right-facing row 3), then `-gravity center -extent 64x64`
-   for spear/boomerang/axe and `32x32` for arrow/shield/bolt. Frames chosen: spear thrust row 3 col 5,
-   boomerang row 3 col 2, axe walk row 3 col 1 (+behind), arrow shoot row 3 col 9, shield walk row 3 col 1.
-3. Item icons: `-crop 32x32+X+Y +repage` per cell. Effects: aura 32×32, star 32×32. Bolt = orb cell.
-4. `magick montage -mode concatenate -tile 8x -background none` of all icons in a fixed order into
-   `src/assets/items.png`; the script writes `src/assets/items.txt` with one `name x y w h` line per
-   icon in the same order (it knows the tile size and order, so coordinates are computed, not read back).
-5. Held starters: recompose `otto.png` with dragonspear walk bg (below body) and fg (above hair),
-   `imma.png` with staff bg/fg, `gino.png` with bow walk bg/fg. 128 px walk layers are first
-   `-crop 64x64+32+32`-style re-gridded to 64 px cells (crop each 128 px frame's centre 64×64 and
-   re-tile 9×4) before flattening with the 576×256 body sheet. Lina keeps no held weapon.
-6. Credits: append rows for every new generator layer path to `CREDITS-lpc.csv`; copy Reemax
-   `credits.txt` as `CREDITS-lpc-items.txt` and `CREDITS-food.txt` as `CREDITS-lpc-food.txt`;
-   `CREDITS.md` gets sections for both packs.
+`weaponDefs` / `weaponUpgrades` keep today's numbers under the new enum names, except:
+Dragon Spear `size` 100 (matches the LPC thrust reach; upgrades keep their `+size` deltas),
+Boomerang `ttl` 3.0 and `speed` 320; ttl upgrades are ordered so `2·speed/boomerangAccel ≤ ttl` at
+every level, Lina's +20% included (tested).
 
-`nimble assets` remains the single entry point. Generated PNGs/manifest are committed.
+## 3. Player attack animation
 
-## 5. Data (`src/data.nim`)
+- New player facts `Anim: BodyAnim` (`NoAnim, AnimThrust, AnimSlash, AnimShoot, AnimCast`) and
+  `AnimStart: float` (total time). Inserted at `startRun` as `NoAnim`, `0`.
+- In the weapon-cooldown rule, after `attackPlan` inserts a volley: if `kind ==
+  characterDefs[hero].weapon` and `weaponDefs[kind].anim != NoAnim`, insert `Anim` and
+  `AnimStart = tt`. Non-starter weapons never touch it.
+- No rule expires it: render treats the animation as finished when
+  `tt − AnimStart ≥ animDefs[anim].secs`; the facts stay in place (no retract churn).
+- Render: while active, draw `characterDefs[hero].attackSheet` at column
+  `int((tt − AnimStart) / secs · frames)` (clamped), row `facing.ord`, at the sheet's cell size in
+  world pixels (192 for oversize thrust/slash, 64 for shoot/cast), centred on the player. Body
+  scale is identical to the walk sheet; the weapon overflows the 64 px box. Otherwise draw the walk
+  sheet as today. The player keeps moving during the animation.
+- Attack sheets include the weapon layers. To avoid a doubled spear, `ProjSpec`/projectile gains
+  `Held: bool`: `attackPlan` sets it on volley 0 of a `Lunge` when the weapon is the hero's starter;
+  render skips the icon for held projectiles. Extra volleys and a non-starter spear draw the icon.
+- Hit flash: the white square becomes the `spark` sprite (LPC effects sheet), 24 px, shrinking to
+  0 over `hitFlashSecs` (paranim's instanced image batches have no per-instance alpha).
 
-- `WeaponKind = enum DragonSpear, ArcaneStaff, Longbow, WarAxe, Boomerang, Garlic, RoundShield`.
-- `Sprite = enum SprSpear, SprBolt, SprArrow, SprAxe, SprBoomerang, SprGarlic, SprShield, SprAura,
-  SprGemBlue, SprGemGreen, SprGemRed, SprCoin, SprChicken, SprChest, SprVacuum, SprSpinach, SprArmor,
-  SprHollowHeart, SprPummarola, SprEmptyTome, SprWings, SprAttractorb`.
-- `Rect = tuple[x, y, w, h: int]`; `atlas*: array[Sprite, Rect]` built at compile time by parsing
-  `staticRead("assets/items.txt")`; manifest names are the enum names without the `Spr` prefix,
-  lower-cased (`spear`, `gemblue`, `emptytome`, …). A missing name is a compile-time error.
-- `WeaponDef`, `PassiveDef` gain `sprite: Sprite`; `pickupSprite(kind: PickupKind): Sprite` maps
-  gems/coin/chicken/chest/vacuum. Passive icons: Spinach→leaf, Armor→platemail, HollowHeart→potion_red,
-  Pummarola→apple, EmptyTome→tome, Wings→boots, Attractorb→orb.
-- `characterDefs` names/perks unchanged; starting weapons follow the rename.
+## 4. Data (`src/data.nim`)
 
-## 6. Rendering (`src/render.nim`)
+```nim
+Motion*   = enum Lunge, Straight, Homing, Arc, Return, Orbit, Aura
+BodyAnim* = enum NoAnim, AnimThrust, AnimSlash, AnimShoot, AnimCast
+SheetId*  = enum ShZombie, ShSkeleton, ShMudman, ShGhost, ShReaper, ShBat, ShKoalio, ShParakeet,
+                 ShOtto, ShOttoAttack, ShImma, ShImmaAttack, ShLina, ShLinaAttack,
+                 ShGino, ShGinoAttack   # batches flush in this order: survivors draw on top
+Sprite*   = enum SprSpear, SprBolt, SprArrow, SprAxe, SprBoomerang, SprShield, SprGarlic, SprAura,
+                 SprSpark, SprGemBlue, SprGemGreen, SprGemRed, SprCoin, SprChicken, SprChest,
+                 SprVacuum, SprSpinach, SprArmor, SprHollowHeart, SprPummarola, SprEmptyTome,
+                 SprWings, SprAttractorb
+Rect*     = tuple[x, y, w, h: int]
 
-- Load `items.png` as one more sheet; `addIcon(spr: Sprite, cx, cy, w, h: float, angle = 0.0,
-  alpha = 1.0, flip = false)` crops the atlas rect and applies translate → rotate → scale like `addRect`.
-- Projectiles by kind: DragonSpear → `spear` icon drawn at the hitbox centre, width = hitbox size,
-  flipped when the spear points left; ArcaneStaff → `bolt` 24 px rotated to `angle`; Longbow → `arrow`
-  28 px rotated; WarAxe → `axe` `size*1.4` rotated (spins); Boomerang → `boomerang` `size*1.6` rotated
-  by `angle + tt*12`; RoundShield → `shield` `size*1.6`; Garlic → `aura` scaled to `2r` at alpha 0.35
-  plus `garlic` 20 px above the player's head.
-- Pickups: gems 16 px with a 3 px bob (`sin(tt*4 + id)`), coin 18 px, chicken 22 px, chest 28 px,
-  vacuum 20 px spinning.
-- Hit flash, HP bar, XP bar, overlays stay quads. Draw order: ground → pickups → aura → sprites
-  (enemies, player) → projectiles → flashes/bars.
-- Level-up cards: 48 px icon left of the title; HUD slot lists: 24 px icon followed by the level
-  number (no names). `drawCharSelect` unchanged.
+WeaponDef*    += sprite: Sprite, uiSprite: Sprite, motion: Motion, anim: BodyAnim, spin: float, drawScale: float
+PassiveDef*   += sprite: Sprite
+CharacterDef*   sheet: SheetId (was string); += attackSheet: SheetId
+EnemyDef*       sheet: SheetId (was string)
 
-## 7. Tests
+sheetDefs*: array[SheetId, tuple[file: string, cellW, cellH: int]]
+animDefs*:  array[BodyAnim, tuple[frames: int, secs: float]]   # NoAnim = (1, 0)
+atlas*:     array[Sprite, Rect]   # parsed at compile time from staticRead("assets/items.txt")
+proc pickupSprite*(kind: PickupKind): Sprite
+```
 
-- `test_data`: every `Sprite` has a non-empty atlas rect inside the atlas image bounds (the script also
-  writes `size W H` as the first manifest line); every weapon and passive references a sprite;
-  `weaponDefs[DragonSpear].name == "Dragon Spear"`; existing curve/upgrade tests updated for names.
-- `test_rules`, `test_systems`: enum renames only (Whip→DragonSpear, MagicWand→ArcaneStaff,
-  Knife→Longbow, KingBible→RoundShield, Runetracer→Boomerang, Axe→WarAxe).
-- Rendering verified by screenshots from a `-d:autoplay` run (title, char select, run at ~2 min with
-  every weapon added via a temporary `-d:allweapons` test aid or by editing `startRun` in a scratch
-  test, level-up overlay).
+- Manifest names are the enum names without `Spr`, lower-cased (`spear`, `gemblue`, `emptytome`).
+  A name missing from the manifest is a compile-time error. First manifest line is `size W H`.
+- `drawScale` multiplies the projectile `size` for the icon width (spear 1.0 → icon length = hitbox
+  length; bolt 3.5; arrow 5.0; axe 1.4; boomerang 1.6; shield 1.6; aura 2.0 → ring diameter).
+- Passive icons: Spinach→leaf, Armor→platemail, HollowHeart→red potion, Pummarola→apple,
+  EmptyTome→tome, Wings→boots, Attractorb→orb.
+- `characterDefs`: Otto DragonSpear, Imma ArcaneStaff, Lina WarAxe, Gino Longbow; names, HP and
+  perks unchanged.
+- `systems.attackPlan`, `systems.hitsEnemy` and `rules.moveProjectiles` switch on
+  `weaponDefs[kind].motion`, never on `WeaponKind`.
+- `render` has one projectile path: `addIcon(def.sprite, pos, size · def.drawScale,
+  angle + tt · def.spin)`; the only branches are `Aura` (skip) and `Held` (skip while the thrust
+  animation plays). The garlic ring is *not* drawn from the Aura projectile — its 0.05 s ttl would
+  strobe — but from the weapon slot: `drawWorld` walks `getWeapons`, and for a slot whose motion is
+  `Aura` draws the ring (and the garlic bulb over the head) every frame from
+  `weaponAt(kind, level).size · stats.area`.
+- `sheets` in render become `array[SheetId, Sheet]` filled from `sheetDefs` (string keys gone).
 
-## 8. Out of scope
+## 5. Sprite sources (all paths verified 2026-09-04 against the generator repo)
 
-Enemy projectiles, LPC thrust/shoot/slash attack animations on the player, weapon colour variants
-per character, evolutions, new weapons.
+Generator root: `https://raw.githubusercontent.com/liberatedpixelcup/Universal-LPC-Spritesheet-Character-Generator/master/spritesheets/`.
+Character body layers use the same bodies/legs/torso/heads/hair as today, with the animation name
+swapped (`walk` → `thrust`, `slash`, `shoot`, `spellcast`); all exist at the standard 64 px sizes
+(thrust 512×256, slash 384×256, shoot 832×256, spellcast 448×256).
+
+| Use | Files | Cell |
+|---|---|---|
+| Otto held spear (walk) | `weapon/polearm/dragonspear/{background,foreground}/walk/steel.png` (1664×512) | 128 → regrid to 64 |
+| Otto thrust | `weapon/polearm/dragonspear/{background,foreground}/thrust/steel.png` (1536×768) | 192, 8 cols |
+| Imma held staff (walk) | `weapon/magic/simple/{background,foreground}/walk/simple.png` (576×256) | 64 |
+| Imma spellcast | `weapon/magic/simple/{background,foreground}/spellcast/simple.png` (448×256) | 64, 7 cols |
+| Gino held bow (walk) | `weapon/ranged/bow/normal/walk/{background,foreground}/steel.png` (1664×512) | 128 → 64 |
+| Gino shoot | `weapon/ranged/bow/normal/universal/{background,foreground}/shoot/steel.png` (832×256) + `weapon/ranged/bow/arrow/shoot/arrow.png` (832×256) | 64, 13 cols |
+| Lina held axe (walk) | `weapon/blunt/waraxe/behind/walk/waraxe.png`, `weapon/blunt/waraxe/walk/waraxe.png` (576×256) | 64 |
+| Lina slash | `weapon/blunt/waraxe/attack_slash/behind/waraxe.png`, `weapon/blunt/waraxe/attack_slash/waraxe.png` (1152×768) | 192, 6 cols |
+| `spear` icon | dragonspear thrust fg+bg, right-facing row, frame 5, trimmed (93×13 → shrunk to 64 wide) | |
+| `arrow` icon | arrow shoot sheet, right row, frame 8 (nocked, horizontal), trimmed | |
+| `axe` icon | waraxe walk (+behind), right row, frame 1, trimmed | |
+| `boomerang` icon | Reemax items sheet cell (9,8) (green boomerang; simpler than cutting the 192 px throw sheet) | 32 |
+| `shield` icon | `shield/round/walk/brown.png` (576×256), down row (front view), frame 0, trimmed | |
+| gems, coin, chicken, passives | Reemax "[LPC] Items and game effects" `items1.png` (32 px cells, verified): coin (9,0), gem_red (12,3), gem_blue (12,4), gem_green (12,5), chicken (8,6), tome (0,9), potion_red (3,5), platemail (0,1), boots (13,3), leaf (8,4), apple (8,5), crystal orb (2,9) — https://opengameart.org/content/lpc-items-and-game-effects | 32 |
+| `bolt`, `aura`, `vacuum`, `spark` | same pack `effects.png` (verified): bolt = blue four-point sparkle (10,0), aura = round blue swirl (16,2) with alpha baked to 0.35, vacuum = purple burst (3,0), spark = blue burst (11,0) | 32 |
+| `garlic` | bluecarrot16 "[LPC] Food" v2 `fruits-veggies.png`, cell (23,15) (verified) — https://opengameart.org/content/lpc-food | 32 |
+| `chest` | LPC Base Assets `tiles/chests.png`, top-left 32×32 (already downloaded) | 32 |
+
+Licenses: generator layers CC-BY-SA 3.0 / GPL 3.0 / OGA-BY 3.0 per `CREDITS.csv` row; Reemax
+CC-BY-SA 3.0 / GPL; Food CC-BY-SA 3.0 / GPL 3.0.
+
+## 6. Asset pipeline (`tools/fetch_assets.sh`)
+
+1. `regrid IN cellIn cellOut cols rows OUT`: `+repage`, `-crop cellIn×cellIn +repage`, `-gravity
+   center -background none -extent cellOut×cellOut`, montage back with `-mode concatenate -tile
+   cols×rows`. Every LPC PNG is `+repage`d before cropping (they carry page offsets).
+2. Walk sheets `<name>.png` (64 px, 9×4) as today plus held weapon: bg layer under the body, fg
+   layer over the hair. 128 px walk layers (spear, bow) are regridded 128 → 64 first.
+3. Attack sheets `<name>_attack.png`: bodies/legs/torso/head/hair regridded 64 → 192 for Otto
+   (thrust, 8×4) and Lina (slash, 6×4), flattened between the weapon bg and fg layers; Gino (shoot,
+   13×4, 64 px, arrow layer on top) and Imma (spellcast, 7×4, 64 px) flatten at native size.
+4. Icons: crop frame, `-fuzz 20% -trim` (drops faint glows so rects hug the visible pixels), shrink with `-resize '64x64>'` if larger, centre in a 64×64 cell.
+5. `magick montage -mode concatenate -tile 8x -background none` of all cells in a fixed order into
+   `src/assets/items.png`; the script writes `src/assets/items.txt` (`size W H` then one
+   `name x y w h` per icon: the icon's *tight* rect inside its cell, from the trimmed size and the
+   cell index) so the game draws each icon at its own aspect ratio.
+6. Credits: rows for every new generator layer path into `CREDITS-lpc.csv`; copy Reemax
+   `credits.txt` → `CREDITS-lpc-items.txt`, Food `CREDITS-food.txt` → `CREDITS-lpc-food.txt`;
+   sections in `CREDITS.md`.
+
+`nimble assets` remains the single entry point. Generated PNGs and the manifest are committed.
+
+## 7. Rendering (`src/render.nim`)
+
+- `items.png` is one more sheet; `addIcon(spr: Sprite, cx, cy, w: float, angle = 0.0)` crops the
+  atlas rect, derives the height from the rect's aspect, and applies translate → rotate → scale.
+  No alpha/flip: instanced image batches have no per-instance colour, and rotation covers direction.
+- `addIconFit(spr, cx, cy, box)` fits an icon in a square for the HUD and level-up cards; icons
+  wider than 2:1 lie on a 45° diagonal.
+- Projectiles: §4 single path. Lunge spear: icon length `size`, rotated to `angle`, centred on the
+  hitbox. Aura: ring sprite scaled to `2r` at alpha 0.35, `garlic` 20 px above the head.
+- Pickups: gems 16 px with a 3 px bob (`sin(tt·4 + id)`), coin 18, chicken 22, chest 28, vacuum 20
+  spinning.
+- Player: walk or attack sheet per §3. HP bar, XP bar, overlays stay quads.
+- Draw order: ground → pickups → aura → enemies + player → projectiles → sparks → bars.
+- Level-up cards: 48 px icon left of the title. HUD slot lists: 24 px icon + level number, names
+  dropped. Both take their weapon icon from `weaponDefs[k].uiSprite`, not `.sprite`: Garlic shows
+  the bulbs (`SprGarlic`), every other weapon its projectile sprite. `drawCharSelect` unchanged (the walk frame already shows the held weapon).
+
+## 8. Tests
+
+- `test_data`: every `Sprite` rect lies inside the manifest `size`; every weapon and passive has a
+  sprite; every `SheetId` file parses as a PNG (IHDR width/height at byte 16) and
+  `animDefs[anim].frames · cellW ≤ width` for each character's attack sheet; names
+  (`"Dragon Spear"`, …); `characterDefs[Lina].weapon == WarAxe`; existing curve/upgrade tests under
+  the new enum names.
+- `test_systems`: Lunge volley 0 lies along `facing`, volley 1 opposite; rotated-rectangle hit test
+  for an Up-facing lunge; Return projectile decelerates, `Turned` flips once, hit list is cleared,
+  retract within the catch radius; other motions unchanged; `Held` set only for the hero's starter.
+- `test_rules`: starter fire inserts `Anim`/`AnimStart`; a non-starter weapon fire leaves `NoAnim`;
+  animation is inactive after `secs`.
+- Visual: `tools/screenshots.sh` with `-d:autoplay` — title, select, each starter mid-attack, a run
+  with every weapon, level-up card. Screenshots replace `docs/screenshots/*.png`.
+
+## 9. README
+
+- Survivor table: Lina → War Axe; note that the starter weapon animates.
+- Weapon table: new names and behaviours (spear 4-way lunge, boomerang returns).
+- New "Adding a weapon" section: the four edits (enum, `weaponDefs` row, `weaponUpgrades` row,
+  icon line in `fetch_assets.sh`) plus `tools/screenshots.sh` to eyeball it.
+- Credits: Reemax items, LPC Food, new generator layers.
+- Every screenshot re-shot after implementation (same file names).
+
+## 10. Out of scope
+
+Enemy projectiles, body animations for non-starter weapons, weapon colour variants per character,
+evolutions, new weapons.

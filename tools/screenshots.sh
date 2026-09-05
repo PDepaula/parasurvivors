@@ -14,6 +14,9 @@ set -u
 BIN=$1; PFX=$2; KEYS=$3; TIMES=$4
 cd "$(dirname "$0")/.."
 OUT=tmp/shots; mkdir -p "$OUT"
+# the game's framebuffer has an alpha channel, so the compositor blends the desktop through the
+# grass unless the window is forced opaque (Hyprland >= 0.55 Lua config; older ones ignore this)
+hyprctl eval 'hl.window_rule({match={class="Parasurvivors"}, opaque=true})' >/dev/null 2>&1
 T0=$(date +%s.%N)
 PS_KEYS="$KEYS" "$BIN" >/dev/null 2>&1 & PID=$!
 until hyprctl clients -j | jq -e --argjson pid "$PID" '.[]|select(.pid==$pid and .mapped)' >/dev/null; do sleep 0.05; done

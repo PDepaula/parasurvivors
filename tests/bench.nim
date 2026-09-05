@@ -1,12 +1,12 @@
 import times, random, sets, strutils
 
 import pararules
-import data, systems, rules
+import data, rules
 
 proc bench(n: int, ticks: int): (float, float, float) =
   var s = newSession()
   s.startRun(Otto)
-  s.addWeapon(MagicWand); s.addWeapon(Knife)
+  s.addWeapon(ArcaneStaff); s.addWeapon(Longbow)
   randomize(1)
   for i in 0 ..< n:
     discard s.spawnEnemy(Zombie, rand(1200.0) - 600, rand(800.0) - 400, 10)
