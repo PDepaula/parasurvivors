@@ -100,6 +100,9 @@ suite "data":
       check r.y + r.h <= ah
     for k in PassiveKind:
       check atlas[passiveDefs[k].sprite].w > 0
+    for k in WeaponKind:
+      check atlas[weaponDefs[k].sprite].w > 0 and atlas[weaponDefs[k].uiSprite].w > 0
+    check weaponDefs[Garlic].uiSprite == SprGarlic
     check pickupSprite(GemBlue) == SprGemBlue
     check pickupSprite(Chest) == SprChest
 

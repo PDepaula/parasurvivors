@@ -8,7 +8,7 @@ from paranim/primitives import nil
 import paratext, paratext/gl/text
 import stb_image/read as stbi
 import pararules
-import math, strutils, sequtils
+import math, sequtils
 import data, systems, rules
 
 const
@@ -287,7 +287,7 @@ proc drawWorld[G](game: G, ww, wh, tt: float) =
   # projectiles, garlic bulb, hit sparks: icons over the sprites
   for p in session.queryAll(gameRules.getProjectiles):
     let d = weaponDefs[p.kind]
-    if d.motion == Aura or p.held:
+    if d.motion == Aura or (p.held and animActive(player.anim, player.animStart, tt)):
       continue
     addIcon(d.sprite, p.pos.x, p.pos.y, p.size * d.drawScale, p.angle + tt * d.spin)
   if hasGarlic:
@@ -316,7 +316,7 @@ proc drawHud[G](game: G, ww, wh, gameTime: float) =
   drawText(game, "Kills " & $player.kills & "   Gold " & $player.gold, 10, 24, ww, wh, yellow)
   var y = wh - 30
   for w in session.queryAll(gameRules.getWeapons):
-    addIconFit(weaponDefs[w.kind].sprite, 22, y + 12, 24)
+    addIconFit(weaponDefs[w.kind].uiSprite, 22, y + 12, 24)
     drawText(game, $w.level, 40, y, ww, wh, white, 0.8)
     y -= 30
   y = wh - 30
@@ -340,7 +340,7 @@ proc drawLevelUp[G](game: G, ww, wh: float) =
     let y = wh / 2 - 70 + float(i) * 70
     let marker = if i == m.selected: "> " else: "  "
     case c.kind
-    of NewWeapon, UpgradeWeapon: addIconFit(weaponDefs[c.weapon].sprite, ww / 2 - 240, y + 20, 48)
+    of NewWeapon, UpgradeWeapon: addIconFit(weaponDefs[c.weapon].uiSprite, ww / 2 - 240, y + 20, 48)
     of NewPassive, UpgradePassive: addIconFit(passiveDefs[c.passive].sprite, ww / 2 - 240, y + 20, 48)
     of BonusGold: addIconFit(SprCoin, ww / 2 - 240, y + 20, 48)
     of BonusHeal: addIconFit(SprChicken, ww / 2 - 240, y + 20, 48)

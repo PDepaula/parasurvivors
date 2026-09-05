@@ -55,6 +55,7 @@ type
     cooldown*, damage*, speed*, ttl*, size*: float
     amount*, pierce*: int
     sprite*: Sprite
+    uiSprite*: Sprite    ## HUD / level-up icon; the projectile sprite unless a weapon needs a clearer one
     motion*: Motion
     anim*: BodyAnim      ## body animation when this is the hero's starter weapon
     spin*: float         ## icon rotation speed, rad/s
@@ -186,25 +187,25 @@ const
   weaponDefs*: array[WeaponKind, WeaponDef] = [
     DragonSpear: WeaponDef(name: "Dragon Spear", desc: "Lunges in the faced direction, passes through enemies",
       cooldown: 1.35, damage: 10, speed: 0, ttl: 0.15, size: 100, amount: 1, pierce: 999,
-      sprite: SprSpear, motion: Lunge, anim: AnimThrust, spin: 0, drawScale: 1.0),
+      sprite: SprSpear, uiSprite: SprSpear, motion: Lunge, anim: AnimThrust, spin: 0, drawScale: 1.0),
     ArcaneStaff: WeaponDef(name: "Arcane Staff", desc: "Fires at the nearest enemy",
       cooldown: 1.2, damage: 10, speed: 300, ttl: 2.5, size: 10, amount: 1, pierce: 0,
-      sprite: SprBolt, motion: Homing, anim: AnimCast, spin: 0, drawScale: 3.5),
+      sprite: SprBolt, uiSprite: SprBolt, motion: Homing, anim: AnimCast, spin: 0, drawScale: 3.5),
     Longbow: WeaponDef(name: "Longbow", desc: "Arrows fly in the faced direction",
       cooldown: 1.0, damage: 6.5, speed: 450, ttl: 1.5, size: 8, amount: 1, pierce: 1,
-      sprite: SprArrow, motion: Straight, anim: AnimShoot, spin: 0, drawScale: 5.0),
+      sprite: SprArrow, uiSprite: SprArrow, motion: Straight, anim: AnimShoot, spin: 0, drawScale: 5.0),
     WarAxe: WeaponDef(name: "War Axe", desc: "High damage, arcs overhead",
       cooldown: 4.0, damage: 20, speed: 300, ttl: 2.5, size: 20, amount: 1, pierce: 3,
-      sprite: SprAxe, motion: Arc, anim: AnimSlash, spin: 10, drawScale: 1.4),
+      sprite: SprAxe, uiSprite: SprAxe, motion: Arc, anim: AnimSlash, spin: 10, drawScale: 1.4),
     Boomerang: WeaponDef(name: "Boomerang", desc: "Flies out and comes back, hits both ways",
       cooldown: 3.0, damage: 10, speed: 320, ttl: 3.0, size: 10, amount: 1, pierce: 999,
-      sprite: SprBoomerang, motion: Return, anim: NoAnim, spin: 12, drawScale: 1.6),
+      sprite: SprBoomerang, uiSprite: SprBoomerang, motion: Return, anim: NoAnim, spin: 12, drawScale: 1.6),
     Garlic: WeaponDef(name: "Garlic", desc: "Damages nearby enemies",
       cooldown: 1.3, damage: 5, speed: 0, ttl: 0.05, size: 80, amount: 1, pierce: 999,
-      sprite: SprAura, motion: Aura, anim: NoAnim, spin: 0, drawScale: 2.0),
+      sprite: SprAura, uiSprite: SprGarlic, motion: Aura, anim: NoAnim, spin: 0, drawScale: 2.0),
     RoundShield: WeaponDef(name: "Round Shield", desc: "Orbits around the character",
       cooldown: 3.0, damage: 10, speed: 2.5, ttl: 3.0, size: 14, amount: 1, pierce: 999,
-      sprite: SprShield, motion: Orbit, anim: NoAnim, spin: 0, drawScale: 1.6),
+      sprite: SprShield, uiSprite: SprShield, motion: Orbit, anim: NoAnim, spin: 0, drawScale: 1.6),
   ]
 
   weaponUpgrades*: array[WeaponKind, array[2 .. maxWeaponLevel, WeaponUpgrade]] = [

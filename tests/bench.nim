@@ -1,7 +1,7 @@
 import times, random, sets, strutils
 
 import pararules
-import data, systems, rules
+import data, rules
 
 proc bench(n: int, ticks: int): (float, float, float) =
   var s = newSession()

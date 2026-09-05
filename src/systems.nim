@@ -55,6 +55,13 @@ proc hitsEnemy[P, E](p: P, e: E): bool =
   else:
     dist(p.pos.x, p.pos.y, e.pos.x, e.pos.y) < p.size + r
 
+const maxEnemyReach = block:
+  ## Largest enemy radius; collide's cell scan must reach this far past a projectile's own size.
+  var m = 0.0
+  for k in EnemyKind:
+    m = max(m, enemyRadius(enemyDefs[k].size))
+  m
+
 proc collide*[P, E](projs: openArray[P], enemies: openArray[E]): seq[Hit] =
   ## Every (projectile, enemy) overlap this tick, honouring pierce and hitIds.
   if enemies.len == 0:
@@ -66,7 +73,7 @@ proc collide*[P, E](projs: openArray[P], enemies: openArray[E]): seq[Hit] =
     var allowed = p.pierce + 1 - p.hitIds.len
     if allowed <= 0:
       continue
-    let reach = p.size + 40.0
+    let reach = p.size + maxEnemyReach
     let (c0x, c0y) = cellOf(p.pos.x - reach, p.pos.y - reach)
     let (c1x, c1y) = cellOf(p.pos.x + reach, p.pos.y + reach)
     block scan:
@@ -148,6 +155,7 @@ proc attackPlan*(kind: WeaponKind, level: int, st: Stats, px, py: float, facing:
   let (fx, fy) = facingVec(facing)
   case w.motion
   of Lunge:
+    # volleys 4+ would stack on 0..3; unreachable today (max amount is 2 + Gino's +1)
     for i in 0 ..< n:
       let (dx, dy) = lungeDir(facing, i)
       result.add ProjSpec(kind: kind, x: px + dx * size / 2, y: py + dy * size / 2,

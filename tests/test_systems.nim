@@ -133,3 +133,18 @@ suite "systems":
     for (id, dx, dy) in moves:
       if id == 10: check dx < 0
       if id == 11: check dx > 0
+
+  test "the biggest enemy is hit anywhere inside the overlap radius":
+    # a Reaper's radius is far larger than the old hardcoded 40 px scan pad
+    let r = enemyRadius(enemyDefs[Reaper].size)
+    for kind in [ArcaneStaff, Longbow, WarAxe, Boomerang, RoundShield, Garlic]:
+      let size = weaponDefs[kind].size
+      var offsets: seq[float]
+      var d = size + 41.0
+      while d < size + r:
+        offsets.add d
+        d += 4.0
+      for dx in offsets:
+        let hits = collide([proj(1, 0, 0, kind = kind, pierce = 999, size = size)],
+                           [enemy(10, dx, 0, Reaper)])
+        check hits.len == 1

@@ -199,7 +199,8 @@ sort -u "$TMP/used.txt" | while read -r rel; do
     grep -F "\"$(dirname "$rel").png\"" "$TMP/CREDITS.csv" >> "$OUT/CREDITS-lpc.csv" ||
     grep -F "\"$(dirname "$rel")/walk.png\"" "$TMP/CREDITS.csv" >> "$OUT/CREDITS-lpc.csv" ||
     grep -F "\"$(echo "$rel" | sed -E 's#/(walk|thrust|slash|shoot|spellcast|attack_slash)/#/#; s#/(walk|thrust|slash|shoot|spellcast)\.png#.png#')\"" "$TMP/CREDITS.csv" >> "$OUT/CREDITS-lpc.csv" ||
-    grep -m1 -F "\"$(dirname "$rel")/" "$TMP/CREDITS.csv" >> "$OUT/CREDITS-lpc.csv" ||
+    { grep -m1 -F "\"$(dirname "$rel")/" "$TMP/CREDITS.csv" >> "$OUT/CREDITS-lpc.csv" &&
+      echo "note: $rel credited via its directory's first row" >&2; } ||
     echo "WARNING: no credits row for $rel" >&2
 done
 awk '!seen[$0]++' "$OUT/CREDITS-lpc.csv" > "$TMP/dedup.csv" && mv "$TMP/dedup.csv" "$OUT/CREDITS-lpc.csv"
