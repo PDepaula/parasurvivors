@@ -32,6 +32,14 @@ suite "data":
     check weaponAt(DragonSpear, 3).damage == 15.0
     check weaponAt(ArcaneStaff, 3).cooldown < weaponAt(ArcaneStaff, 1).cooldown
 
+  test "a boomerang always comes back before its ttl runs out":
+    # round trip under constant pull = 2*v/a; must fit the ttl at every level,
+    # including Lina's +20% projectile speed
+    for lvl in 1 .. maxWeaponLevel:
+      let w = weaponAt(Boomerang, lvl)
+      for projSpeed in [1.0, 1.2]:
+        check 2 * w.speed * projSpeed / boomerangAccel <= w.ttl
+
   test "passives change stats":
     let none = computeStats(Otto, [])
     check none.might == 1.1

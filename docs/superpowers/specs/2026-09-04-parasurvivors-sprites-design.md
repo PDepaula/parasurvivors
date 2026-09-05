@@ -54,8 +54,8 @@ perpendiculars, then repeat. Hitbox is a rectangle of length `size` and half-wid
 rectangle (project the enemy offset onto the direction and its normal).
 
 **Return** (replaces Runetracer). Spawned at the player with velocity `speed` in a random direction
-(as now). Each tick velocity gains `boomerangAccel · dt` (constant, 220 px/s²) toward the player's
-current position, so at base speed it turns around ≈ 230 px out after ≈ 1.5 s and comes back even if
+(as now). Each tick velocity gains `boomerangAccel · dt` (constant, 300 px/s²) toward the player's
+current position, so at base speed it turns around ≈ 170 px out after ≈ 1.1 s and comes back even if
 the player moved; speed upgrades push it farther, ttl upgrades give it the slack to return. New projectile fact `Turned: bool`; when the velocity first points toward the player
 (`dot(vel, player − pos) > 0`) set `Turned = true` and clear `HitIds` so the same enemies can be
 hit on the way back. Retract when `Turned` and within `boomerangCatchRadius = 20` px of the player,
@@ -65,7 +65,8 @@ or when `ttl ≤ 0`.
 
 `weaponDefs` / `weaponUpgrades` keep today's numbers under the new enum names, except:
 Dragon Spear `size` 100 (matches the LPC thrust reach; upgrades keep their `+size` deltas),
-Boomerang `ttl` 3.0 and `speed` 320 (≈ 240 px out and back).
+Boomerang `ttl` 3.0 and `speed` 320; ttl upgrades are ordered so `2·speed/boomerangAccel ≤ ttl` at
+every level, Lina's +20% included (tested).
 
 ## 3. Player attack animation
 

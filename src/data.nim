@@ -111,7 +111,7 @@ const
   axeGravity* = 900.0
   orbitRadius* = 90.0
   lungeHalfWidth* = 24.0       ## half-width of a Lunge hitbox across its direction
-  boomerangAccel* = 220.0      ## px/s² pull toward the player for Return projectiles
+  boomerangAccel* = 300.0      ## px/s² pull toward the player for Return projectiles
   boomerangCatchRadius* = 20.0 ## a returning boomerang this close to the player is caught
   chickenHeal* = 30.0
   coinValue* = 10
@@ -242,12 +242,12 @@ const
       8: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile")],
     Boomerang: [
       2: WeaponUpgrade(speed: 50, damage: 5, text: "Speed +50, damage +5"),
-      3: WeaponUpgrade(ttl: 0.3, text: "Lasts 0.3s longer"),
+      3: WeaponUpgrade(ttl: 0.5, text: "Lasts 0.5s longer"),
       4: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
       5: WeaponUpgrade(speed: 50, damage: 5, text: "Speed +50, damage +5"),
       6: WeaponUpgrade(ttl: 0.3, text: "Lasts 0.3s longer"),
       7: WeaponUpgrade(amount: 1, text: "Fires 1 more projectile"),
-      8: WeaponUpgrade(damage: 5, ttl: 0.5, text: "Damage +5, lasts 0.5s longer")],
+      8: WeaponUpgrade(damage: 5, ttl: 0.3, text: "Damage +5, lasts 0.3s longer")],
     Garlic: [
       2: WeaponUpgrade(size: 20, damage: 2, text: "Area +20, damage +2"),
       3: WeaponUpgrade(cooldown: -0.1, damage: 1, text: "Faster pulse, damage +1"),
