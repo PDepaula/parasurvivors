@@ -69,6 +69,8 @@ for rel in "${USED_LPC[@]}"; do
     grep -F "\"$(dirname "$rel").png\"" "$TMP/CREDITS.csv" >> "$OUT/CREDITS-lpc.csv" ||
     echo "WARNING: no credits row for $rel" >&2
 done
+# layers shared between characters (bodies, heads) would otherwise appear once per use
+awk '!seen[$0]++' "$OUT/CREDITS-lpc.csv" > "$TMP/dedup.csv" && mv "$TMP/dedup.csv" "$OUT/CREDITS-lpc.csv"
 
 echo "done. sizes:"
 file "$OUT"/*.png | sed 's/PNG image data, //' | cut -d, -f1-2
