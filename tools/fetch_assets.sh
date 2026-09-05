@@ -30,7 +30,8 @@ flatten() {
 }
 
 # regrid IN CELL_IN CELL_OUT COLS ROWS OUT : re-centre every frame on a different cell size.
-# 64->192 pads a body sheet under an oversize weapon; 128->64 crops a 128 px walk layer to 64.
+# 64->192 pads a body sheet under an oversize weapon; 128->128 only trims the sheet. Never crop
+# a 128 px weapon layer down to 64: the spear and bow poke past the small cell and get cut off.
 # The first crop takes just the COLSxROWS frames we want: the oversize (128 px) walk sheets are
 # padded out to 13 columns, and montage would otherwise spill the extras onto a second page.
 regrid() {
@@ -61,9 +62,9 @@ LINA=(body/bodies/female legs/pantaloons/thin torso/clothes/shortsleeve/shortsle
 GINO=(body/bodies/male legs/pants/male torso/clothes/shortsleeve/shortsleeve/male head/heads/human/male hair/balding/adult)
 
 # --- Otto: dragon spear (walk layers are 128 px, thrust layers are 192 px oversize)
-regrid "$(layer weapon/polearm/dragonspear/background/walk/steel.png)" 128 64 9 4 "$TMP/spear_walk_bg.png"
-regrid "$(layer weapon/polearm/dragonspear/foreground/walk/steel.png)" 128 64 9 4 "$TMP/spear_walk_fg.png"
-body walk 64 9 otto "${OTTO[@]}"
+regrid "$(layer weapon/polearm/dragonspear/background/walk/steel.png)" 128 128 9 4 "$TMP/spear_walk_bg.png"
+regrid "$(layer weapon/polearm/dragonspear/foreground/walk/steel.png)" 128 128 9 4 "$TMP/spear_walk_fg.png"
+body walk 128 9 otto "${OTTO[@]}"
 flatten "$OUT/otto.png" "$TMP/spear_walk_bg.png" "${BODY[@]}" "$TMP/spear_walk_fg.png"
 body thrust 192 8 otto "${OTTO[@]}"
 flatten "$OUT/otto_attack.png" "$(layer weapon/polearm/dragonspear/background/thrust/steel.png)" "${BODY[@]}" "$(layer weapon/polearm/dragonspear/foreground/thrust/steel.png)"
@@ -81,9 +82,9 @@ body slash 192 6 lina "${LINA[@]}"
 flatten "$OUT/lina_attack.png" "$(layer weapon/blunt/waraxe/attack_slash/behind/waraxe.png)" "${BODY[@]}" "$(layer weapon/blunt/waraxe/attack_slash/waraxe.png)"
 
 # --- Gino: longbow (walk layers 128 px, shoot 64 px + arrow layer)
-regrid "$(layer weapon/ranged/bow/normal/walk/background/steel.png)" 128 64 9 4 "$TMP/bow_walk_bg.png"
-regrid "$(layer weapon/ranged/bow/normal/walk/foreground/steel.png)" 128 64 9 4 "$TMP/bow_walk_fg.png"
-body walk 64 9 gino "${GINO[@]}"
+regrid "$(layer weapon/ranged/bow/normal/walk/background/steel.png)" 128 128 9 4 "$TMP/bow_walk_bg.png"
+regrid "$(layer weapon/ranged/bow/normal/walk/foreground/steel.png)" 128 128 9 4 "$TMP/bow_walk_fg.png"
+body walk 128 9 gino "${GINO[@]}"
 flatten "$OUT/gino.png" "$TMP/bow_walk_bg.png" "${BODY[@]}" "$TMP/bow_walk_fg.png"
 body shoot 64 13 gino "${GINO[@]}"
 flatten "$OUT/gino_attack.png" "$(layer weapon/ranged/bow/normal/universal/background/shoot/steel.png)" "${BODY[@]}" \
@@ -142,7 +143,10 @@ icon axe "$(layer weapon/blunt/waraxe/behind/walk/waraxe.png)" "$(layer weapon/b
 icon boomerang $(cell "$ITEMS" 9 8)
 icon shield "$(layer shield/round/walk/brown.png)" +repage -crop 64x64+0+128 +repage
 icon garlic $(cell "$FOOD" 23 15)
-icon aura $(cell "$EFFECTS" 16 2) -channel A -evaluate multiply 0.35 +channel
+# the garlic range marker: a soft ring drawn here rather than an effects cell, because any filled
+# 32 px cell turns into a translucent square once it is scaled up to the aura's diameter
+icon aura -size 64x64 xc:none -fill none -stroke '#e6ffd8' -strokewidth 4 -draw 'circle 31.5,31.5 31.5,5.5' \
+  -blur 0x1.2 -channel A -evaluate multiply 0.55 +channel
 icon spark $(cell "$EFFECTS" 11 0)
 # pickups
 icon gemblue $(cell "$ITEMS" 12 4)

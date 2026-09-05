@@ -28,6 +28,28 @@ The sprites and font are committed, so you do not need to run the asset pipeline
 change `tools/fetch_assets.sh` and want to regenerate them, `nimble assets` does it (needs `curl`,
 `unzip` and ImageMagick 7).
 
+### In a browser
+
+The same source builds to WebAssembly with [Emscripten](https://emscripten.org). Install the
+emsdk once (no root needed), then:
+
+```sh
+git clone https://github.com/emscripten-core/emsdk ~/.local/share/emsdk
+~/.local/share/emsdk/emsdk install latest && ~/.local/share/emsdk/emsdk activate latest
+source ~/.local/share/emsdk/emsdk_env.sh
+
+nimble build -d:release -d:emscripten -d:noaudio   # writes web/index.{html,js,wasm}
+python3 -m http.server 8000 --directory web        # open http://localhost:8000
+```
+
+Built with emsdk 6.0.9 and smoke-tested headless with `-d:autoplay`; the wasm is about 2.2 MB. The web build is silent for now:
+the release binary embeds a 31 MB soundfont, which is too much to download, so `-d:noaudio` is
+required until the sound effects are pre-rendered (see
+`docs/superpowers/specs/2026-09-04-web-build-research.md`). The wasm stack is raised to 8 MB in
+`config.nims`; the 64 KB default overflows on the first tick of a run.
+
+![The wasm build at minute 20 in headless Chromium](docs/screenshots/web-chromium.png)
+
 ### Controls
 
 | Key | Action |
@@ -98,7 +120,7 @@ Koala at 8, 15 and 25, and the Reaper at 30. Bosses drop a chest that levels a w
 ![Late waves](docs/screenshots/late-game.png)
 
 Past minute 30 the Reaper shows up: 65535 HP, faster than you, and it deals 999 damage on touch.
-This run is the immortal `-d:autoplay` test build, which is the only reason it is still going at 36:03.
+This run is the immortal `-d:autoplay` test build, which is the only reason it is still going at 31:35.
 
 ![The Reaper](docs/screenshots/reaper.png)
 
@@ -121,6 +143,7 @@ All of these go after `nimble build` or `nim c`:
 | `-d:autoplay` | skip the menus, auto-pick the first level-up, player cannot die |
 | `-d:perf` | print per-tick work time and enemy count every 5 game seconds |
 | `-d:keyscript` | feed scripted key presses from `PS_KEYS` (see `tools/screenshots.sh`) |
+| `-d:emscripten` | WebAssembly build into `web/`; needs `emcc` on the path and `-d:noaudio` |
 
 `-d:fastclock -d:autoplay` together is the "reach minute 30 unattended" test.
 
@@ -142,13 +165,17 @@ cd tests && nim c -r -d:release --hints:off --outdir:../tmp bench.nim   # one ti
   input, and the hand-off between rules and systems.
 - `src/render.nim` — paranim instanced sprite batches, paratext HUD and menus.
 - `src/audio.nim` — paramidi renders every sound effect and the music loop at startup, parasound plays them.
-- `src/parasurvivors.nim` — GLFW window and main loop.
+- `src/parasurvivors.nim` — GLFW window and main loop; under `-d:emscripten` the loop is handed to
+  `emscripten_set_main_loop` and the canvas size is polled each frame.
+- `shell_minimal.html` — the page the web build is embedded in (parakeet's, plus a `keydown` handler
+  that stops arrows and Space from scrolling).
 - `patches/pararules/engine.nim` — pararules 1.4.0 with a one-line fix (`patches/pararules/engine.diff`),
   swapped in via `patchFile` in `config.nims`. Without it `fireRules` copies a rule's whole match table
   once per queued `then`, which is O(N²) per tick with N per-entity rule firings. Upstream PR:
   [paranim/pararules#12](https://github.com/paranim/pararules/pull/12).
 
-The design and the implementation plan the code was built from are in `docs/superpowers/`.
+The design and the implementation plan the code was built from are in `docs/superpowers/`, along
+with a retro on how the pieces composed (`docs/superpowers/retros/`).
 
 ### Adding a weapon
 
@@ -169,7 +196,10 @@ Most weapons are just a table row. To add one:
    branch in `render.drawWorld`.
 6. Making it a *starter* weapon costs more than a table row: a `BodyAnim` value and an `animDefs`
    row, a `SheetId` value and a `sheetDefs` row, `characterDefs[...].attackSheet`, and a
-   `body`/`flatten` block in `tools/fetch_assets.sh` for the attack sheet.
+   `body`/`flatten` block in `tools/fetch_assets.sh` for the attack sheet. Long weapons come as
+   128 px (walk) or 192 px (attack) LPC layers: keep that cell size in `sheetDefs` and pad the
+   body layers up to it, never crop the weapon down to 64, or it is cut off at the cell edge.
+   `nimble test` checks that no walk frame touches its cell's sides.
 7. `nimble test`, then `tools/screenshots.sh` to look at it.
 
 ### Performance notes

@@ -1,5 +1,7 @@
 import unittest
 import data
+import stb_image/read as stbi
+import std/strutils
 
 proc pngSize(path: string): (int, int) =
   ## Width/height from the IHDR chunk; tests run from the repo root.
@@ -116,7 +118,31 @@ suite "data":
       let a = animDefs[weaponDefs[d.weapon].anim]
       let sh = sheetDefs[d.attackSheet]
       check pngSize("src/assets/" & sh.file) == (a.frames * sh.cellW, 4 * sh.cellH)
-      check pngSize("src/assets/" & sheetDefs[d.sheet].file) == (9 * 64, 4 * 64)
+      let ws = sheetDefs[d.sheet]
+      check pngSize("src/assets/" & ws.file) == (9 * ws.cellW, 4 * ws.cellH)
+
+  test "hero sprites are not clipped at the cell sides":
+    ## A weapon that pokes past the cell edge gets cut off in the walk cycle: the dragon spear
+    ## and the longbow both come from 128 px LPC walk layers, so their sheets must keep 128 px
+    ## cells. Only the left and right columns are checked; the 64 px LPC art itself touches the
+    ## top row (hair in the walk bounce, the bow when shooting upward).
+    proc clippedCells(id: SheetId): seq[string] =
+      let sh = sheetDefs[id]
+      var w, h, ch: int
+      let px = stbi.load("src/assets/" & sh.file, w, h, ch, 4)
+      proc alpha(x, y: int): byte = px[(y * w + x) * 4 + 3]
+      for row in 0 ..< h div sh.cellH:
+        for col in 0 ..< w div sh.cellW:
+          let x0 = col * sh.cellW
+          var hit = false
+          for y in row * sh.cellH ..< (row + 1) * sh.cellH:
+            if alpha(x0, y) != 0 or alpha(x0 + sh.cellW - 1, y) != 0: hit = true
+          if hit: result.add sh.file & " col " & $col & " row " & $row
+    ## Walk sheets only: the 64 px LPC shoot sheet draws Gino's arrow right up to the edge.
+    for c in CharacterKind:
+      let bad = clippedCells(characterDefs[c].sheet)
+      check bad.len == 0
+      if bad.len > 0: echo "  clipped: ", bad.join(", ")
 
   test "animation timing":
     check not animActive(NoAnim, 0.0, 0.0)

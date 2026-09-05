@@ -16,6 +16,13 @@ var
   game: Game
   window: GLFWWindow
 
+when defined(emscripten):
+  proc emscripten_set_main_loop(f: proc() {.cdecl.}, fps: cint, simulateInfiniteLoop: bool) {.importc.}
+  proc emscripten_get_canvas_element_size(target: cstring, width: ptr cint, height: ptr cint): cint {.importc.}
+  # The browser resizes the canvas via CSS, not GLFW, so the framebuffer-size
+  # callback never fires; poll the canvas each frame and forward real changes.
+  var canvasWidth, canvasHeight: cint
+
 when defined(keyscript):
   # test aid: scripted input for screenshots/demos (nim c -d:keyscript ...).
   # PS_KEYS="1:enter,2:down,3:enter,3.2:d:2.5" = press at 1s, ..., hold `d` from 3.2s for 2.5s.
@@ -45,13 +52,25 @@ when defined(keyscript):
         k.released = true
         onKeyRelease(k.key)
 
-proc mainLoop() =
+proc mainLoop() {.cdecl.} =
   let ts = glfwGetTime()
   when defined(keyscript):
     runScript(ts)
   game.deltaTime = min(ts - game.totalTime, 0.1) # never simulate a huge step after a stall
   game.totalTime = ts
-  game.tick()
+  when defined(emscripten):
+    var width, height: cint
+    if emscripten_get_canvas_element_size("#canvas", width.addr, height.addr) >= 0 and
+        (width != canvasWidth or height != canvasHeight):
+      canvasWidth = width
+      canvasHeight = height
+      window.frameSizeCallback(width, height)
+    try:
+      game.tick()
+    except Exception as ex:
+      echo ex.msg
+  else:
+    game.tick()
   window.swapBuffers()
   glfwPollEvents()
 
@@ -69,7 +88,10 @@ when isMainModule:
     quit(-1)
 
   window.makeContextCurrent()
-  glfwSwapInterval(1)
+  when not defined(emscripten):
+    # requestAnimationFrame already vsyncs, and the GLFW shim's swapInterval
+    # only warns when called before emscripten_set_main_loop.
+    glfwSwapInterval(1)
 
   discard window.setKeyCallback(keyCallback)
   discard window.setFramebufferSizeCallback(frameSizeCallback)
@@ -86,8 +108,11 @@ when isMainModule:
   game.init()
   game.totalTime = glfwGetTime()
 
-  while not window.windowShouldClose:
-    mainLoop()
+  when defined(emscripten):
+    emscripten_set_main_loop(mainLoop, 0, true)
+  else:
+    while not window.windowShouldClose:
+      mainLoop()
 
   window.destroyWindow()
   glfwTerminate()

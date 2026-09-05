@@ -281,7 +281,8 @@ proc drawWorld[G](game: G, ww, wh, tt: float) =
                 player.pos.x, player.pos.y, cell, cell)
     else:
       let col = if player.moving: 1 + int(tt / frameSecs) mod 8 else: 0
-      addSprite(c.sheet, col, player.facing.ord, player.pos.x, player.pos.y, 64, 64)
+      let cell = float(sheetDefs[c.sheet].cellW)
+      addSprite(c.sheet, col, player.facing.ord, player.pos.x, player.pos.y, cell, cell)
   flushSprites(game, ww, wh, camera)
 
   # projectiles, garlic bulb, hit sparks: icons over the sprites
@@ -375,7 +376,8 @@ proc drawCharSelect[G](game: G, ww, wh: float) =
     let marker = if i == m.selected: "> " else: "  "
     drawText(game, marker & c.name & "  -  " & weaponDefs[c.weapon].name & "  -  " & c.perk, ww / 2 - 260, y, ww, wh,
              if i == m.selected: yellow else: white)
-    addSprite(c.sheet, 0, Down.ord, ww / 2 - 300, y + 12, 64, 64)
+    let cell = float(sheetDefs[c.sheet].cellW)
+    addSprite(c.sheet, 0, Down.ord, ww / 2 - 300, y + 12, cell, cell)
   flushSprites(game, ww, wh, mat3f(1))
   drawTextCentered(game, "Up/Down + Enter", wh - 60, ww, wh, white, 0.8)
 

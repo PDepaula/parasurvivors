@@ -155,13 +155,13 @@ const
     ShBat: SheetDef(file: "bat.png", cellW: 32, cellH: 32),
     ShKoalio: SheetDef(file: "koalio.png", cellW: 18, cellH: 26),
     ShParakeet: SheetDef(file: "parakeet.png", cellW: 70, cellH: 100),
-    ShOtto: SheetDef(file: "otto.png", cellW: 64, cellH: 64),
+    ShOtto: SheetDef(file: "otto.png", cellW: 128, cellH: 128),   # 128 px LPC walk layer: the spear
     ShOttoAttack: SheetDef(file: "otto_attack.png", cellW: 192, cellH: 192),
     ShImma: SheetDef(file: "imma.png", cellW: 64, cellH: 64),
     ShImmaAttack: SheetDef(file: "imma_attack.png", cellW: 64, cellH: 64),
     ShLina: SheetDef(file: "lina.png", cellW: 64, cellH: 64),
     ShLinaAttack: SheetDef(file: "lina_attack.png", cellW: 192, cellH: 192),
-    ShGino: SheetDef(file: "gino.png", cellW: 64, cellH: 64),
+    ShGino: SheetDef(file: "gino.png", cellW: 128, cellH: 128),   # 128 px LPC walk layer: the bow
     ShGinoAttack: SheetDef(file: "gino_attack.png", cellW: 64, cellH: 64),
   ]
 
