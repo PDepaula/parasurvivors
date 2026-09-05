@@ -142,6 +142,7 @@ const
   Key1* = 49
   Key2* = 50
   Key3* = 51
+  KeyF3* = 292
 
   defaultStats* = Stats(might: 1.0, armor: 0.0, regen: 0.0, cooldownMul: 1.0, speedMul: 1.0,
                         magnet: 1.0, area: 1.0, projSpeed: 1.0, duration: 1.0, amount: 0)

@@ -30,7 +30,8 @@ when defined(keyscript):
   import data
   const keyNames = {"enter": KeyEnter, "space": KeySpace, "esc": KeyEscape, "up": KeyUp, "down": KeyDown,
                     "left": KeyLeft, "right": KeyRight, "w": KeyW, "a": KeyA, "s": KeyS, "d": KeyD,
-                    "p": KeyP, "r": KeyR, "1": Key1, "2": Key2, "3": Key3}.toTable
+                    "p": KeyP, "r": KeyR, "1": Key1, "2": Key2, "3": Key3,
+                    "f3": KeyF3}.toTable
   type ScriptedKey = object
     key: int
     at, until: float
