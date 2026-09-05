@@ -54,9 +54,9 @@ perpendiculars, then repeat. Hitbox is a rectangle of length `size` and half-wid
 rectangle (project the enemy offset onto the direction and its normal).
 
 **Return** (replaces Runetracer). Spawned at the player with velocity `speed` in a random direction
-(as now). Each tick velocity gains `accel · dt` toward the player's current position with
-`accel = 2 · speed / ttl`, so it turns around about `ttl / 2` out and comes back even if the player
-moved. New projectile fact `Turned: bool`; when the velocity first points toward the player
+(as now). Each tick velocity gains `boomerangAccel · dt` (constant, 220 px/s²) toward the player's
+current position, so at base speed it turns around ≈ 230 px out after ≈ 1.5 s and comes back even if
+the player moved; speed upgrades push it farther, ttl upgrades give it the slack to return. New projectile fact `Turned: bool`; when the velocity first points toward the player
 (`dot(vel, player − pos) > 0`) set `Turned = true` and clear `HitIds` so the same enemies can be
 hit on the way back. Retract when `Turned` and within `boomerangCatchRadius = 20` px of the player,
 or when `ttl ≤ 0`.
@@ -84,17 +84,17 @@ Boomerang `ttl` 3.0 and `speed` 320 (≈ 240 px out and back).
 - Attack sheets include the weapon layers. To avoid a doubled spear, `ProjSpec`/projectile gains
   `Held: bool`: `attackPlan` sets it on volley 0 of a `Lunge` when the weapon is the hero's starter;
   render skips the icon for held projectiles. Extra volleys and a non-starter spear draw the icon.
-- Hit flash: the white square becomes the `spark` sprite (LPC effects sheet), 24 px, alpha fading
-  over `hitFlashSecs`.
+- Hit flash: the white square becomes the `spark` sprite (LPC effects sheet), 24 px, shrinking to
+  0 over `hitFlashSecs` (paranim's instanced image batches have no per-instance alpha).
 
 ## 4. Data (`src/data.nim`)
 
 ```nim
 Motion*   = enum Lunge, Straight, Homing, Arc, Return, Orbit, Aura
 BodyAnim* = enum NoAnim, AnimThrust, AnimSlash, AnimShoot, AnimCast
-SheetId*  = enum ShOtto, ShOttoAttack, ShImma, ShImmaAttack, ShLina, ShLinaAttack,
-                 ShGino, ShGinoAttack, ShZombie, ShSkeleton, ShMudman, ShGhost,
-                 ShReaper, ShBat, ShKoalio, ShParakeet
+SheetId*  = enum ShZombie, ShSkeleton, ShMudman, ShGhost, ShReaper, ShBat, ShKoalio, ShParakeet,
+                 ShOtto, ShOttoAttack, ShImma, ShImmaAttack, ShLina, ShLinaAttack,
+                 ShGino, ShGinoAttack   # batches flush in this order: survivors draw on top
 Sprite*   = enum SprSpear, SprBolt, SprArrow, SprAxe, SprBoomerang, SprShield, SprGarlic, SprAura,
                  SprSpark, SprGemBlue, SprGemGreen, SprGemRed, SprCoin, SprChicken, SprChest,
                  SprVacuum, SprSpinach, SprArmor, SprHollowHeart, SprPummarola, SprEmptyTome,
@@ -114,8 +114,8 @@ proc pickupSprite*(kind: PickupKind): Sprite
 
 - Manifest names are the enum names without `Spr`, lower-cased (`spear`, `gemblue`, `emptytome`).
   A name missing from the manifest is a compile-time error. First manifest line is `size W H`.
-- `drawScale` multiplies the projectile `size` for the icon (spear 1.0 → icon length = hitbox
-  length; bolt 2.4; arrow 3.5; axe 1.4; boomerang 1.6; shield 1.6).
+- `drawScale` multiplies the projectile `size` for the icon width (spear 1.0 → icon length = hitbox
+  length; bolt 2.4; arrow 3.5; axe 1.4; boomerang 1.6; shield 1.6; aura 2.0 → ring diameter).
 - Passive icons: Spinach→leaf, Armor→platemail, HollowHeart→red potion, Pummarola→apple,
   EmptyTome→tome, Wings→boots, Attractorb→orb.
 - `characterDefs`: Otto DragonSpear, Imma ArcaneStaff, Lina WarAxe, Gino Longbow; names, HP and
@@ -143,19 +143,18 @@ swapped (`walk` → `thrust`, `slash`, `shoot`, `spellcast`); all exist at the s
 | Gino shoot | `weapon/ranged/bow/normal/universal/{background,foreground}/shoot/steel.png` (832×256) + `weapon/ranged/bow/arrow/shoot/arrow.png` (832×256) | 64, 13 cols |
 | Lina held axe (walk) | `weapon/blunt/waraxe/behind/walk/waraxe.png`, `weapon/blunt/waraxe/walk/waraxe.png` (576×256) | 64 |
 | Lina slash | `weapon/blunt/waraxe/attack_slash/behind/waraxe.png`, `weapon/blunt/waraxe/attack_slash/waraxe.png` (1152×768) | 192, 6 cols |
-| `spear` icon | dragonspear thrust fg+bg, right-facing row, frame 5, trimmed, 64×64 canvas | |
-| `arrow` icon | arrow shoot sheet, right row, frame 9, trimmed, 32×32 | |
-| `axe` icon | waraxe walk (+behind), right row, frame 1, trimmed, 64×64 | |
-| `boomerang` icon | `weapon/ranged/boomerang/boomerang.png` (1152×768, 192 px), right row, frame 2, trimmed, 64×64 | |
-| `shield` icon | `shield/round/walk/brown.png` (576×256), right row, frame 1, trimmed, 32×32 | |
-| `bolt`, gems, coin, chicken, passives | Reemax "[LPC] Items and game effects" `items1.png` (32 px cells): coin (9,0), gem_red (12,3), gem_blue (12,4), gem_green (12,5), chicken (8,6), tome (0,9), potion_red (3,5), platemail (0,1), boots (13,3), leaf (8,4), apple (8,5), orb (14,5) — https://opengameart.org/content/lpc-items-and-game-effects | 32 |
-| `aura`, `vacuum`, `spark` | same pack `effects.png`: ring ≈ cell (16,3), star burst ≈ (0,7), spark ≈ cell (2,7), the small white burst | 32 |
-| `garlic` | bluecarrot16 "[LPC] Food" v2 `fruits-veggies.png`, ≈ cell (23,15) — https://opengameart.org/content/lpc-food | 32 |
+| `spear` icon | dragonspear thrust fg+bg, right-facing row, frame 5, trimmed (93×13 → shrunk to 64 wide) | |
+| `arrow` icon | arrow shoot sheet, right row, frame 8 (nocked, horizontal), trimmed | |
+| `axe` icon | waraxe walk (+behind), right row, frame 1, trimmed | |
+| `boomerang` icon | Reemax items sheet cell (9,8) (green boomerang; simpler than cutting the 192 px throw sheet) | 32 |
+| `shield` icon | `shield/round/walk/brown.png` (576×256), down row (front view), frame 0, trimmed | |
+| gems, coin, chicken, passives | Reemax "[LPC] Items and game effects" `items1.png` (32 px cells, verified): coin (9,0), gem_red (12,3), gem_blue (12,4), gem_green (12,5), chicken (8,6), tome (0,9), potion_red (3,5), platemail (0,1), boots (13,3), leaf (8,4), apple (8,5), crystal orb (2,9) — https://opengameart.org/content/lpc-items-and-game-effects | 32 |
+| `bolt`, `aura`, `vacuum`, `spark` | same pack `effects.png` (verified): bolt = blue swirl orb (13,2), aura = blue ring (16,3) with alpha baked to 0.35, vacuum = purple burst (3,0), spark = blue sparkle (10,0) | 32 |
+| `garlic` | bluecarrot16 "[LPC] Food" v2 `fruits-veggies.png`, cell (23,15) (verified) — https://opengameart.org/content/lpc-food | 32 |
 | `chest` | LPC Base Assets `tiles/chests.png`, top-left 32×32 (already downloaded) | 32 |
 
 Licenses: generator layers CC-BY-SA 3.0 / GPL 3.0 / OGA-BY 3.0 per `CREDITS.csv` row; Reemax
-CC-BY-SA 3.0 / GPL; Food CC-BY-SA 3.0 / GPL 3.0. Cell coordinates marked ≈ are confirmed by the
-plan's visual-check step before commit.
+CC-BY-SA 3.0 / GPL; Food CC-BY-SA 3.0 / GPL 3.0.
 
 ## 6. Asset pipeline (`tools/fetch_assets.sh`)
 
@@ -167,11 +166,11 @@ plan's visual-check step before commit.
 3. Attack sheets `<name>_attack.png`: bodies/legs/torso/head/hair regridded 64 → 192 for Otto
    (thrust, 8×4) and Lina (slash, 6×4), flattened between the weapon bg and fg layers; Gino (shoot,
    13×4, 64 px, arrow layer on top) and Imma (spellcast, 7×4, 64 px) flatten at native size.
-4. Icons: crop frame, `-trim`, `-gravity center -extent` to 64 or 32 as listed in §5; item cells
-   `-crop 32x32+X+Y`.
-5. `magick montage -mode concatenate -tile 8x -background none` of all icons in a fixed order into
+4. Icons: crop frame, `-trim`, shrink with `-resize '64x64>'` if larger, centre in a 64×64 cell.
+5. `magick montage -mode concatenate -tile 8x -background none` of all cells in a fixed order into
    `src/assets/items.png`; the script writes `src/assets/items.txt` (`size W H` then one
-   `name x y w h` per icon, coordinates computed from tile size and order).
+   `name x y w h` per icon: the icon's *tight* rect inside its cell, from the trimmed size and the
+   cell index) so the game draws each icon at its own aspect ratio.
 6. Credits: rows for every new generator layer path into `CREDITS-lpc.csv`; copy Reemax
    `credits.txt` → `CREDITS-lpc-items.txt`, Food `CREDITS-food.txt` → `CREDITS-lpc-food.txt`;
    sections in `CREDITS.md`.
@@ -180,8 +179,9 @@ plan's visual-check step before commit.
 
 ## 7. Rendering (`src/render.nim`)
 
-- `items.png` is one more sheet; `addIcon(spr: Sprite, cx, cy, w, h: float, angle = 0.0,
-  alpha = 1.0, flip = false)` crops the atlas rect and applies translate → rotate → scale.
+- `items.png` is one more sheet; `addIcon(spr: Sprite, cx, cy, w: float, angle = 0.0)` crops the
+  atlas rect, derives the height from the rect's aspect, and applies translate → rotate → scale.
+  No alpha/flip: instanced image batches have no per-instance colour, and rotation covers direction.
 - Projectiles: §4 single path. Lunge spear: icon length `size`, rotated to `angle`, centred on the
   hitbox. Aura: ring sprite scaled to `2r` at alpha 0.35, `garlic` 20 px above the head.
 - Pickups: gems 16 px with a 3 px bob (`sin(tt·4 + id)`), coin 18, chicken 22, chest 28, vacuum 20
