@@ -152,16 +152,25 @@ The design and the implementation plan the code was built from are in `docs/supe
 
 ### Adding a weapon
 
-Everything a weapon needs is data. To add one:
+Most weapons are just a table row. To add one:
 
 1. `src/data.nim`: add the value to `WeaponKind`, a `weaponDefs` row (pick a `motion`, a `sprite`,
-   `drawScale`, `spin`; `anim` only matters if a survivor starts with it) and a `weaponUpgrades` row
-   for levels 2-8.
+   a `uiSprite` for the HUD and level-up cards -- the same sprite unless the world one reads badly
+   as an icon, like Garlic's translucent ring -- plus `drawScale` and `spin`; `anim` only matters if
+   a survivor starts with it) and a `weaponUpgrades` row for levels 2-8. `speed` is px/s for every
+   motion except `Orbit`, where it is rad/s.
 2. If it needs new art: add an `icon NAME ...` line to `tools/fetch_assets.sh`, a `SprNAME` value to
    `Sprite`, run `nimble assets`. A sprite missing from `items.txt` fails to compile.
 3. A new movement style is a new `Motion` value with a branch in `systems.attackPlan` (spawn) and
    `rules.moveProjectiles` (per tick), plus a test in `tests/test_systems.nim`.
-4. `nimble test`, then `tools/screenshots.sh` to look at it.
+4. A non-circular hitbox needs a branch in `systems.hitsEnemy` (the lunge has one); `collide`
+   otherwise assumes `size` is a radius-like reach.
+5. A motion that shouldn't draw as a plain rotating icon (the garlic ring, for example) needs a
+   branch in `render.drawWorld`.
+6. Making it a *starter* weapon costs more than a table row: a `BodyAnim` value and an `animDefs`
+   row, a `SheetId` value and a `sheetDefs` row, `characterDefs[...].attackSheet`, and a
+   `body`/`flatten` block in `tools/fetch_assets.sh` for the attack sheet.
+7. `nimble test`, then `tools/screenshots.sh` to look at it.
 
 ### Performance notes
 

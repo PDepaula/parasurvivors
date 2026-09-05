@@ -40,7 +40,9 @@ Descriptions: "Lunges in the faced direction, passes through enemies", "Fires at
 enemy", "Arrows fly in the faced direction", "High damage, arcs overhead", "Flies out and comes
 back, hits both ways", "Damages nearby enemies", "Orbits around the character".
 
-Cooldowns are all ≥ 1 s, longer than any body animation, so animations never overlap.
+Cooldowns are all ≥ 1 s, longer than any body animation, so animations never overlap (with Empty
+Tome at level 5, `cooldownMul = 0.6`, Gino's Longbow fires every 0.6 s against a 0.5 s shoot
+animation: still no overlap, 0.1 s margin).
 
 ### 2.1 Motions (`systems.attackPlan` spawn pattern + `rules.moveProjectiles` step)
 
@@ -102,7 +104,7 @@ Sprite*   = enum SprSpear, SprBolt, SprArrow, SprAxe, SprBoomerang, SprShield, S
                  SprWings, SprAttractorb
 Rect*     = tuple[x, y, w, h: int]
 
-WeaponDef*    += sprite: Sprite, motion: Motion, anim: BodyAnim, spin: float, drawScale: float
+WeaponDef*    += sprite: Sprite, uiSprite: Sprite, motion: Motion, anim: BodyAnim, spin: float, drawScale: float
 PassiveDef*   += sprite: Sprite
 CharacterDef*   sheet: SheetId (was string); += attackSheet: SheetId
 EnemyDef*       sheet: SheetId (was string)
@@ -124,7 +126,11 @@ proc pickupSprite*(kind: PickupKind): Sprite
 - `systems.attackPlan`, `systems.hitsEnemy` and `rules.moveProjectiles` switch on
   `weaponDefs[kind].motion`, never on `WeaponKind`.
 - `render` has one projectile path: `addIcon(def.sprite, pos, size · def.drawScale,
-  angle + tt · def.spin)`; the only branches are `Aura` (ring + garlic over head) and `Held` (skip).
+  angle + tt · def.spin)`; the only branches are `Aura` (skip) and `Held` (skip while the thrust
+  animation plays). The garlic ring is *not* drawn from the Aura projectile — its 0.05 s ttl would
+  strobe — but from the weapon slot: `drawWorld` walks `getWeapons`, and for a slot whose motion is
+  `Aura` draws the ring (and the garlic bulb over the head) every frame from
+  `weaponAt(kind, level).size · stats.area`.
 - `sheets` in render become `array[SheetId, Sheet]` filled from `sheetDefs` (string keys gone).
 
 ## 5. Sprite sources (all paths verified 2026-09-04 against the generator repo)
@@ -192,7 +198,8 @@ CC-BY-SA 3.0 / GPL; Food CC-BY-SA 3.0 / GPL 3.0.
 - Player: walk or attack sheet per §3. HP bar, XP bar, overlays stay quads.
 - Draw order: ground → pickups → aura → enemies + player → projectiles → sparks → bars.
 - Level-up cards: 48 px icon left of the title. HUD slot lists: 24 px icon + level number, names
-  dropped. `drawCharSelect` unchanged (the walk frame already shows the held weapon).
+  dropped. Both take their weapon icon from `weaponDefs[k].uiSprite`, not `.sprite`: Garlic shows
+  the bulbs (`SprGarlic`), every other weapon its projectile sprite. `drawCharSelect` unchanged (the walk frame already shows the held weapon).
 
 ## 8. Tests
 
